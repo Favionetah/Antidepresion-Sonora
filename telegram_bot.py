@@ -47,7 +47,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     sesion = _obtener_sesion(chat_id)
     motor = MotorFSM(sesion)
     mensaje = motor.obtener_pregunta()
-    await update.message.reply_text(mensaje)
+    opciones = motor.obtener_opciones()
+    reply_markup = _construir_teclado_opciones(opciones) if opciones else None
+    await update.message.reply_text(mensaje, reply_markup=reply_markup)
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -218,7 +220,9 @@ async def _ejecutar_opcion(
         await _procesar_nodo_hoja(update, motor, sesion, confirmacion)
     else:
         mensaje = motor.obtener_pregunta()
-        await update.message.reply_text(f"{confirmacion}\n\n{mensaje}")
+        opciones = motor.obtener_opciones()
+        reply_markup = _construir_teclado_opciones(opciones) if opciones else None
+        await update.message.reply_text(f"{confirmacion}\n\n{mensaje}", reply_markup=reply_markup)
 
 
 async def _procesar_nodo_hoja(
@@ -353,6 +357,14 @@ async def _manejar_redireccion(
     await update.message.reply_text(msg)
 
 
+def _construir_teclado_opciones(opciones: list[dict]) -> InlineKeyboardMarkup:
+    teclado = []
+    for i, opcion in enumerate(opciones):
+        destino = opcion.get("destino", "")
+        teclado.append([InlineKeyboardButton(opcion["texto"], callback_data=f"opt:{i}:{destino}")])
+    return InlineKeyboardMarkup(teclado)
+
+
 def _construir_teclado_acciones(url: str, tiene_token: bool) -> InlineKeyboardMarkup:
     teclado = []
     if url:
@@ -368,6 +380,18 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await query.answer()
     chat_id = update.effective_chat.id
     data = query.data
+
+    if data.startswith("opt:"):
+        partes = data.split(":")
+        if len(partes) >= 2:
+            try:
+                indice = int(partes[1])
+                sesion = _obtener_sesion(chat_id)
+                motor = MotorFSM(sesion)
+                await _ejecutar_opcion(update, motor, sesion, indice)
+            except (ValueError, IndexError):
+                await query.edit_message_text("Opción no válida. Usa /start para reiniciar.")
+        return
 
     if data == "nuevo_diagnostico":
         if chat_id in SESIONES:

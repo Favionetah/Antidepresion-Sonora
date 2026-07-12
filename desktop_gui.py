@@ -126,6 +126,7 @@ class ChatbotSBCApp:
         self._procesando = False
         self._fallos_consecutivos = 0
         self._esperando_feedback = False
+        self._botones_opciones_actuales = []
         self._construir_gui()
         self._iniciar_conversacion()
 
@@ -394,6 +395,44 @@ class ChatbotSBCApp:
         time.sleep(DELAY_MS / 1000)
         self.ventana.after(0, lambda: self._agregar_mensaje(texto, es_usuario))
 
+    def _limpiar_botones_opciones(self) -> None:
+        for btn in self._botones_opciones_actuales:
+            btn.destroy()
+        self._botones_opciones_actuales.clear()
+
+    def _mostrar_botones_opciones(self, opciones: list[dict]) -> None:
+        self._limpiar_botones_opciones()
+        if not opciones:
+            return
+        marco = ctk.CTkFrame(self._chat_frame, fg_color="transparent")
+        marco.pack(fill="x", padx=10, pady=(0, 8))
+        marco.pack_propagate(False)
+        for i, opcion in enumerate(opciones):
+            idx = i
+            btn = ctk.CTkButton(
+                marco,
+                text=opcion["texto"],
+                command=lambda i=idx: self._on_boton_opcion(i),
+                fg_color=SKPRIMARY,
+                hover_color="#7A5F3A",
+                text_color="white",
+                corner_radius=20,
+                height=40,
+                font=("Segoe UI", 12),
+                anchor="w",
+                border_width=0,
+            )
+            btn.pack(fill="x", padx=5, pady=3)
+            self._botones_opciones_actuales.append(btn)
+        self._botones_opciones_actuales.append(marco)
+
+    def _on_boton_opcion(self, indice: int) -> None:
+        if self._procesando:
+            return
+        self._procesando = True
+        self._limpiar_botones_opciones()
+        threading.Thread(target=lambda: self._ejecutar_opcion(indice), daemon=True).start()
+
     def _iniciar_conversacion(self) -> None:
         mensaje = self.motor.obtener_pregunta()
         self._agregar_mensaje_con_efecto(mensaje)
@@ -426,6 +465,9 @@ class ChatbotSBCApp:
     def _procesar_nodo_decision(self) -> None:
         mensaje = self.motor.obtener_pregunta()
         self._agregar_mensaje_con_efecto(mensaje)
+        opciones = self.motor.obtener_opciones()
+        if opciones:
+            self.ventana.after(DELAY_MS + 100, lambda: self._mostrar_botones_opciones(opciones))
         self._procesando = False
 
     def _procesar_nodo_hoja(self) -> None:
@@ -645,6 +687,7 @@ class ChatbotSBCApp:
         self._procesando = False
         self._fallos_consecutivos = 0
         self._esperando_feedback = False
+        self._limpiar_botones_opciones()
         if hasattr(self, '_resultado_playlist'):
             del self._resultado_playlist
         self._chat.configure(state="normal")
