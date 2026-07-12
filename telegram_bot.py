@@ -184,21 +184,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if resultado["tipo"] == "opcion":
         FALLOS[chat_id] = 0
-        await _ejecutar_opcion(update, motor, sesion, resultado["indice"])
+        await _ejecutar_opcion(update.message, motor, sesion, resultado["indice"])
     elif resultado["tipo"] == "redireccion":
         FALLOS[chat_id] = 0
-        await _manejar_redireccion(update, motor, resultado["sugerencia"])
+        await _manejar_redireccion(update.message, motor, resultado["sugerencia"])
     else:
         FALLOS[chat_id] = FALLOS.get(chat_id, 0) + 1
-        await _pedir_clarificacion(update, motor, sesion)
+        await _pedir_clarificacion(update.message, motor, sesion)
 
 
 async def _ejecutar_opcion(
-    update: Update, motor: MotorFSM, sesion: SesionSBC, indice: int
+    message, motor: MotorFSM, sesion: SesionSBC, indice: int
 ) -> None:
     opcion = motor.obtener_info_opcion(indice)
     if not opcion:
-        await update.message.reply_text(
+        await message.reply_text(
             "Esta opción ya no está disponible. Usa /start para comenzar de nuevo."
         )
         return
@@ -206,7 +206,7 @@ async def _ejecutar_opcion(
     texto_opcion = opcion["texto"]
     destino = motor.transicionar(indice)
     if not destino:
-        await update.message.reply_text(
+        await message.reply_text(
             "Hubo un error al procesar tu respuesta. Usa /start para reiniciar."
         )
         return
@@ -217,23 +217,23 @@ async def _ejecutar_opcion(
     )
 
     if motor.es_nodo_hoja():
-        await _procesar_nodo_hoja(update, motor, sesion, confirmacion)
+        await _procesar_nodo_hoja(message, motor, sesion, confirmacion)
     else:
-        mensaje = motor.obtener_pregunta()
+        nuevo_mensaje = motor.obtener_pregunta()
         opciones = motor.obtener_opciones()
         reply_markup = _construir_teclado_opciones(opciones) if opciones else None
-        await update.message.reply_text(f"{confirmacion}\n\n{mensaje}", reply_markup=reply_markup)
+        await message.reply_text(f"{confirmacion}\n\n{nuevo_mensaje}", reply_markup=reply_markup)
 
 
 async def _procesar_nodo_hoja(
-    update: Update, motor: MotorFSM, sesion: SesionSBC, confirmacion: str
+    message, motor: MotorFSM, sesion: SesionSBC, confirmacion: str
 ) -> None:
     diagnostico = motor.obtener_diagnostico()
-    await update.message.reply_text(f"{confirmacion}\n\n{diagnostico}", parse_mode="Markdown")
+    await message.reply_text(f"{confirmacion}\n\n{diagnostico}", parse_mode="Markdown")
 
     nodo = motor.obtener_nodo_actual()
     if not nodo.get("spotify_query"):
-        await update.message.reply_text(
+        await message.reply_text(
             "¿Quieres realizar otro diagnóstico? Usa /start para comenzar de nuevo."
         )
         return
@@ -250,15 +250,15 @@ async def _procesar_nodo_hoja(
             resultado.get("url", ""),
             bool(sesion.token_spotify),
         )
-        await update.message.reply_text(
+        await message.reply_text(
             playlist_msg, parse_mode="Markdown",
             reply_markup=reply_markup,
         )
 
         sesion.registrar_recomendacion(resultado)
-        await _preguntar_feedback(update)
+        await _preguntar_feedback(message)
     else:
-        await update.message.reply_text(
+        await message.reply_text(
             "No pude obtener la playlist en este momento. "
             "Intenta de nuevo más tarde con /spotify.",
             reply_markup=InlineKeyboardMarkup([[
@@ -267,17 +267,17 @@ async def _procesar_nodo_hoja(
         )
 
 
-async def _preguntar_feedback(update: Update) -> None:
-    chat_id = update.effective_chat.id
+async def _preguntar_feedback(message) -> None:
+    chat_id = message.chat.id
     msg = construir_mensaje_feedback()
     ESPERANDO_FEEDBACK[chat_id] = True
-    await update.message.reply_text(msg)
+    await message.reply_text(msg)
 
 
 async def _pedir_clarificacion(
-    update: Update, motor: MotorFSM, sesion: SesionSBC
+    message, motor: MotorFSM, sesion: SesionSBC
 ) -> None:
-    chat_id = update.effective_chat.id
+    chat_id = message.chat.id
     fallos = FALLOS.get(chat_id, 0)
     nodo = motor.obtener_nodo_actual()
     opciones = nodo.get("opciones", [])
@@ -327,11 +327,11 @@ async def _pedir_clarificacion(
             )
         else:
             msg = "Cuéntame con tus palabras cómo te sientes."
-    await update.message.reply_text(msg)
+    await message.reply_text(msg)
 
 
 async def _manejar_redireccion(
-    update: Update, motor: MotorFSM, sugerencia: dict
+    message, motor: MotorFSM, sugerencia: dict
 ) -> None:
     destinos = sugerencia.get("destinos", [])
     opciones = motor.obtener_opciones()
@@ -354,7 +354,7 @@ async def _manejar_redireccion(
             )
     else:
         msg = "Cuéntame un poco más para entenderte mejor."
-    await update.message.reply_text(msg)
+    await message.reply_text(msg)
 
 
 def _construir_teclado_opciones(opciones: list[dict]) -> InlineKeyboardMarkup:
@@ -388,7 +388,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 indice = int(partes[1])
                 sesion = _obtener_sesion(chat_id)
                 motor = MotorFSM(sesion)
-                await _ejecutar_opcion(update, motor, sesion, indice)
+                await _ejecutar_opcion(query.message, motor, sesion, indice)
             except (ValueError, IndexError):
                 await query.edit_message_text("Opción no válida. Usa /start para reiniciar.")
         return
