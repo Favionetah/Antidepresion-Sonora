@@ -8,6 +8,7 @@ from .frases import (
     construir_mensaje_diagnostico,
     construir_mensaje_transicion,
 )
+from .intenciones import match_intencion, match_numero
 
 
 class MotorFSM:
@@ -62,6 +63,13 @@ class MotorFSM:
         if indice_opcion < 0 or indice_opcion >= len(opciones):
             return None
         return opciones[indice_opcion]
+
+    def match_intencion(self, texto: str) -> Optional[int]:
+        opciones = self.obtener_opciones()
+        idx = match_numero(texto, opciones)
+        if idx is not None:
+            return idx
+        return match_intencion(texto, opciones)
 
     def reiniciar(self) -> None:
         self.sesion.reiniciar()

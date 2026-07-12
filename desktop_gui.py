@@ -13,15 +13,27 @@ from chatbot import spotify
 from chatbot.frases import (
     construir_mensaje_confirmacion,
     construir_mensaje_diagnostico,
-    construir_mensaje_transicion,
 )
 
 logger = logging.getLogger(__name__)
 
-COLOR_USUARIO = "#3498DB"
-COLOR_BOT = "#E8F1F5"
-ANCHO_VENTANA = 450
-ALTO_VENTANA = 650
+SKBG = "#F2EBE1"
+SKCARD = "#FBF8F3"
+SKPRIMARY = "#8B6F47"
+SKAMBER = "#D4933A"
+SKGOLD_HOVER = "#BA7D2E"
+SKESPRESSO = "#3D2B1F"
+SKBORDER = "#C4B59E"
+SKGREEN = "#2D8A4E"
+SKGREEN_HOVER = "#23703F"
+SKRED = "#B84A3A"
+SKRED_HOVER = "#9C3D2F"
+SKINPUT_BG = "#FFFFFF"
+SKINPUT_BORDER = "#D0C4B0"
+SKSHADOW = "#D5C9B8"
+
+ANCHO_VENTANA = 480
+ALTO_VENTANA = 680
 DELAY_MS = 400
 OAUTH_HOST = "127.0.0.1"
 OAUTH_PORT = 8888
@@ -53,18 +65,20 @@ class _DesktopOAuthHandler(BaseHTTPRequestHandler):
         html = (
             "<!DOCTYPE html>"
             "<html><head><meta charset='utf-8'>"
-            "<title>Autenticación completada</title>"
+            "<title>Conexión exitosa</title>"
             "<style>"
-            "body{font-family:sans-serif;display:flex;justify-content:center;"
-            "align-items:center;height:100vh;margin:0;background:#f0f8ff;}"
-            ".card{background:white;padding:2rem;border-radius:16px;"
-            "box-shadow:0 4px 20px rgba(0,0,0,0.1);text-align:center;}"
-            "h1{color:#2ecc71;}p{color:#555;}"
+            "body{font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;"
+            "align-items:center;height:100vh;margin:0;background:#F2EBE1;}"
+            ".card{background:#FBF8F3;padding:2.5rem;border-radius:20px;"
+            "box-shadow:8px 8px 20px rgba(139,111,71,0.15),"
+            "-4px -4px 12px rgba(255,255,255,0.7);text-align:center;max-width:400px;}"
+            "h1{color:#D4933A;font-weight:600;margin:0 0 0.5rem 0;}"
+            "p{color:#7A6A5A;margin:0;line-height:1.6;}"
             "</style></head><body>"
             "<div class='card'>"
-            "<h1>✅ Autenticación completada</h1>"
-            "<p>Tu cuenta de Spotify se ha conectado correctamente.</p>"
-            "<p>Ya puedes volver a la aplicación.</p>"
+            "<h1>Conexión exitosa</h1>"
+            "<p>Tu cuenta de Spotify se ha vinculado correctamente.<br>"
+            "Ya puedes volver a la aplicación y continuar.</p>"
             "</div></body></html>"
         )
         self.wfile.write(html.encode("utf-8"))
@@ -78,16 +92,18 @@ class _DesktopOAuthHandler(BaseHTTPRequestHandler):
             "<html><head><meta charset='utf-8'>"
             "<title>Error de autenticación</title>"
             "<style>"
-            "body{font-family:sans-serif;display:flex;justify-content:center;"
-            "align-items:center;height:100vh;margin:0;background:#fff5f5;}"
-            ".card{background:white;padding:2rem;border-radius:16px;"
-            "box-shadow:0 4px 20px rgba(0,0,0,0.1);text-align:center;}"
-            "h1{color:#e74c3c;}p{color:#555;}"
+            "body{font-family:'Segoe UI',sans-serif;display:flex;justify-content:center;"
+            "align-items:center;height:100vh;margin:0;background:#F2EBE1;}"
+            ".card{background:#FBF8F3;padding:2.5rem;border-radius:20px;"
+            "box-shadow:8px 8px 20px rgba(139,111,71,0.15),"
+            "-4px -4px 12px rgba(255,255,255,0.7);text-align:center;max-width:400px;}"
+            "h1{color:#B84A3A;font-weight:600;margin:0 0 0.5rem 0;}"
+            "p{color:#7A6A5A;margin:0;line-height:1.6;}"
             "</style></head><body>"
             "<div class='card'>"
-            "<h1>❌ Error de autenticación</h1>"
-            "<p>No se pudo completar la autenticación con Spotify.</p>"
-            "<p>Intenta de nuevo desde la aplicación.</p>"
+            "<h1>Error de autenticación</h1>"
+            "<p>No se pudo completar la conexión con Spotify.<br>"
+            "Intenta de nuevo.</p>"
             "</div></body></html>"
         )
         self.wfile.write(html.encode("utf-8"))
@@ -103,6 +119,8 @@ class ChatbotSBCApp:
         self.motor = MotorFSM(self.sesion)
         self.sp: Optional[spotipy.Spotify] = None
         self.token_spotify: Optional[str] = None
+        self._procesando = False
+        self._fallos_consecutivos = 0
         self._construir_gui()
         self._iniciar_conversacion()
 
@@ -111,69 +129,196 @@ class ChatbotSBCApp:
         ctk.set_default_color_theme("blue")
 
         self.ventana = ctk.CTk()
-        self.ventana.title("Musicoterapia SBC")
+        self.ventana.title("Antidepresión Sonora — Musicoterapia")
         self.ventana.geometry(f"{ANCHO_VENTANA}x{ALTO_VENTANA}")
         self.ventana.resizable(False, False)
+        self.ventana.configure(fg_color=SKBG)
 
-        self._frame_superior = ctk.CTkFrame(self.ventana, height=60, fg_color="transparent")
-        self._frame_superior.pack(fill="x", padx=10, pady=(10, 0))
+        self._construir_barra_superior()
+        self._construir_chat()
+        self._construir_input()
+
+    def _construir_barra_superior(self) -> None:
+        contenedor = ctk.CTkFrame(
+            self.ventana, height=72, fg_color=SKCARD,
+            corner_radius=16, border_width=1, border_color=SKBORDER,
+        )
+        contenedor.pack(fill="x", padx=14, pady=(14, 0))
+        contenedor.pack_propagate(False)
+
+        marco_interno = ctk.CTkFrame(contenedor, fg_color="transparent")
+        marco_interno.pack(fill="both", expand=True, padx=14, pady=10)
+
+        ctk.CTkLabel(
+            marco_interno, text="Antidepresión Sonora",
+            font=("Georgia", 18, "bold"), text_color=SKPRIMARY,
+        ).pack(side="left")
 
         self._btn_spotify = ctk.CTkButton(
-            self._frame_superior,
-            text="Iniciar sesión con Spotify",
+            marco_interno,
+            text="Conectar Spotify",
             command=self._iniciar_sesion_spotify,
-            fg_color="#1DB954",
-            hover_color="#1AA34A",
+            fg_color=SKGREEN,
+            hover_color=SKGREEN_HOVER,
             text_color="white",
-            corner_radius=20,
-            height=35,
+            corner_radius=22,
+            height=36,
+            font=("Segoe UI", 12, "bold"),
+            border_width=1,
+            border_color="#1E6B38",
         )
-        self._btn_spotify.pack(side="right", padx=(0, 5))
+        self._btn_spotify.pack(side="right", padx=(6, 0))
 
         self._btn_reiniciar = ctk.CTkButton(
-            self._frame_superior,
-            text="Reiniciar",
+            marco_interno,
+            text="Nuevo",
             command=self._reiniciar_diagnostico,
-            fg_color="#E74C3C",
-            hover_color="#C0392B",
+            fg_color=SKRED,
+            hover_color=SKRED_HOVER,
             text_color="white",
-            corner_radius=20,
-            height=35,
-            width=90,
+            corner_radius=22,
+            height=36,
+            width=80,
+            font=("Segoe UI", 12, "bold"),
+            border_width=1,
+            border_color="#8E3B2E",
         )
-        self._btn_reiniciar.pack(side="left", padx=(5, 0))
+        self._btn_reiniciar.pack(side="right", padx=(0, 6))
 
-        self._chat_frame = ctk.CTkFrame(self.ventana, fg_color="transparent")
-        self._chat_frame.pack(fill="both", expand=True, padx=10, pady=10)
+    def _construir_chat(self) -> None:
+        self._chat_frame = ctk.CTkFrame(
+            self.ventana, fg_color=SKCARD,
+            corner_radius=16, border_width=1, border_color=SKBORDER,
+        )
+        self._chat_frame.pack(fill="both", expand=True, padx=14, pady=(12, 6))
 
         self._chat = ctk.CTkTextbox(
             self._chat_frame,
             wrap="word",
             state="disabled",
-            fg_color="white",
-            text_color="black",
+            fg_color="#FDFBF7",
+            text_color=SKESPRESSO,
             font=("Segoe UI", 13),
             corner_radius=12,
-            border_width=1,
-            border_color="#DDD",
+            border_width=0,
+            scrollbar_button_color=SKPRIMARY,
+            scrollbar_button_hover_color=SKPRIMARY,
         )
-        self._chat.pack(fill="both", expand=True)
+        self._chat.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self._opciones_frame = ctk.CTkFrame(self.ventana, fg_color="transparent", height=120)
-        self._opciones_frame.pack(fill="x", padx=10, pady=(0, 10))
+        self._chat.tag_config("usuario_nombre", foreground=SKAMBER)
+        self._chat.tag_config("bot_nombre", foreground=SKPRIMARY)
+        self._chat.tag_config("usuario", lmargin1=20, foreground=SKESPRESSO)
+        self._chat.tag_config("bot", lmargin1=20, foreground="#5A4A3A")
 
-        self._botones_dinamicos: list[ctk.CTkButton] = []
+    def _construir_input(self) -> None:
+        contenedor = ctk.CTkFrame(
+            self.ventana, fg_color="transparent", height=56,
+        )
+        contenedor.pack(fill="x", padx=14, pady=(0, 14))
+        contenedor.pack_propagate(False)
+
+        marco_input = ctk.CTkFrame(
+            contenedor, fg_color=SKCARD,
+            corner_radius=28, border_width=1, border_color=SKINPUT_BORDER,
+        )
+        marco_input.pack(fill="both", expand=True)
+
+        self._entry = ctk.CTkEntry(
+            marco_input,
+            placeholder_text="Escribe cómo te sientes...",
+            font=("Segoe UI", 13),
+            fg_color="transparent",
+            text_color=SKESPRESSO,
+            border_width=0,
+            corner_radius=28,
+            height=36,
+        )
+        self._entry.pack(side="left", fill="x", expand=True, padx=(18, 6), pady=8)
+        self._entry.bind("<Return>", lambda e: self._enviar_texto())
+
+        self._btn_enviar = ctk.CTkButton(
+            marco_input,
+            text="Enviar",
+            command=self._enviar_texto,
+            fg_color=SKAMBER,
+            hover_color=SKGOLD_HOVER,
+            text_color="white",
+            corner_radius=28,
+            height=36,
+            width=80,
+            font=("Segoe UI", 13, "bold"),
+            border_width=1,
+            border_color="#B87A28",
+        )
+        self._btn_enviar.pack(side="right", padx=(0, 6), pady=8)
+
+    def _enviar_texto(self) -> None:
+        if self._procesando:
+            return
+        texto = self._entry.get().strip()
+        if not texto:
+            return
+        self._entry.delete(0, "end")
+        self._procesando = True
+        threading.Thread(target=self._procesar_texto_usuario, args=(texto,), daemon=True).start()
+
+    def _procesar_texto_usuario(self, texto: str) -> None:
+        idx = self.motor.match_intencion(texto)
+        if idx is None:
+            self._fallos_consecutivos += 1
+            self._agregar_mensaje(texto, es_usuario=True)
+            self._pedir_clarificacion()
+        else:
+            self._fallos_consecutivos = 0
+            self.ventana.after(0, lambda: self._ejecutar_opcion(idx))
+
+    def _pedir_clarificacion(self) -> None:
+        fallos = self._fallos_consecutivos
+        nodo = self.motor.obtener_nodo_actual()
+        opciones = nodo.get("opciones", [])
+        if not opciones:
+            self._procesando = False
+            return
+
+        if fallos == 1:
+            msg = "Cuéntame un poco más para entenderte mejor."
+        elif fallos == 2:
+            textos = [o["texto"].split("(")[0].strip().lower() for o in opciones]
+            n = len(textos)
+            if n == 1:
+                msg = f"¿Te parece que {textos[0]} describe lo que sientes?"
+            elif n == 2:
+                msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]} o {textos[1]}?"
+            else:
+                msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]}, {textos[1]} o {textos[2]}?"
+        else:
+            palabras_clave = []
+            for o in opciones:
+                parentesis = o["texto"].split("(")
+                if len(parentesis) > 1:
+                    palabras = parentesis[1].rstrip(")").split(",")
+                    palabras_clave.extend(p.strip() for p in palabras[:2])
+            if palabras_clave:
+                ejemplos = ", ".join(palabras_clave[:4])
+                msg = (
+                    "Para ayudarte mejor, dime si alguna de estas palabras "
+                    f"resuena con lo que sientes: {ejemplos}."
+                )
+            else:
+                msg = "Cuéntame con tus palabras cómo te sientes."
+        self._agregar_mensaje_con_efecto(msg)
+        self._procesando = False
 
     def _agregar_mensaje(self, texto: str, es_usuario: bool = False) -> None:
         def insertar() -> None:
             self._chat.configure(state="normal")
-            tag = "usuario" if es_usuario else "bot"
-            color = COLOR_USUARIO if es_usuario else COLOR_BOT
-            texto_color = "white" if es_usuario else "black"
-            nombre = "Tú" if es_usuario else "Asistente"
-            self._chat.insert("end", f"{nombre}:\n", (f"nombre_{tag}",))
-            self._chat.insert("end", f"{texto}\n\n", (tag,))
-            self._chat.tag_config(tag, lmargin1=20, foreground=texto_color)
+            if es_usuario:
+                self._chat.insert("end", "Tú:\n", "usuario_nombre")
+                self._chat.insert("end", f"{texto}\n\n", "usuario")
+            else:
+                self._chat.insert("end", "Asistente:\n", "bot_nombre")
+                self._chat.insert("end", f"{texto}\n\n", "bot")
             self._chat.see("end")
             self._chat.configure(state="disabled")
 
@@ -187,46 +332,24 @@ class ChatbotSBCApp:
         time.sleep(DELAY_MS / 1000)
         self.ventana.after(0, lambda: self._agregar_mensaje(texto, es_usuario))
 
-    def _mostrar_opciones(self, opciones: list[dict]) -> None:
-        self._limpiar_botones()
-        for i, opcion in enumerate(opciones):
-            btn = ctk.CTkButton(
-                self._opciones_frame,
-                text=opcion["texto"],
-                command=lambda idx=i: self._seleccionar_opcion(idx),
-                fg_color=COLOR_USUARIO,
-                hover_color="#2980B9",
-                text_color="white",
-                corner_radius=20,
-                height=40,
-                anchor="w",
-            )
-            btn.pack(fill="x", padx=5, pady=3)
-            self._botones_dinamicos.append(btn)
-
-    def _limpiar_botones(self) -> None:
-        for btn in self._botones_dinamicos:
-            btn.destroy()
-        self._botones_dinamicos.clear()
-
     def _iniciar_conversacion(self) -> None:
         mensaje = self.motor.obtener_pregunta()
         self._agregar_mensaje_con_efecto(mensaje)
-        opciones = self.motor.obtener_opciones()
-        if opciones:
-            self._mostrar_opciones(opciones)
 
-    def _seleccionar_opcion(self, indice: int) -> None:
+    def _ejecutar_opcion(self, indice: int) -> None:
         opcion = self.motor.obtener_info_opcion(indice)
         if not opcion:
+            self._procesando = False
             return
         texto_opcion = opcion["texto"]
         self._agregar_mensaje(texto_opcion, es_usuario=True)
         destino = self.motor.transicionar(indice)
         if not destino:
+            self._procesando = False
             return
+
         nodo_origen = self.motor.obtener_nodo_actual()
-        if hasattr(self, '_nodo_anterior'):
+        if hasattr(self, '_nodo_anterior') and self._nodo_anterior is not None:
             confirmacion = construir_mensaje_confirmacion(
                 self._nodo_anterior, self.sesion, texto_opcion
             )
@@ -241,33 +364,37 @@ class ChatbotSBCApp:
     def _procesar_nodo_decision(self) -> None:
         mensaje = self.motor.obtener_pregunta()
         self._agregar_mensaje_con_efecto(mensaje)
-        opciones = self.motor.obtener_opciones()
-        self._mostrar_opciones(opciones)
+        self._procesando = False
 
     def _procesar_nodo_hoja(self) -> None:
-        self._limpiar_botones()
         diagnostico = self.motor.obtener_diagnostico()
         self._agregar_mensaje_con_efecto(diagnostico)
         self._ejecutar_spotify()
 
-        btn_reiniciar = ctk.CTkButton(
-            self._opciones_frame,
-            text="Realizar nuevo diagnóstico",
-            command=self._reiniciar_diagnostico,
-            fg_color="#2ECC71",
-            hover_color="#27AE60",
-            text_color="white",
-            corner_radius=20,
-            height=45,
-        )
-        btn_reiniciar.pack(fill="x", padx=5, pady=5)
-        self._botones_dinamicos.append(btn_reiniciar)
+        def mostrar_boton():
+            btn_reiniciar = ctk.CTkButton(
+                self._chat_frame,
+                text="Realizar nuevo diagnóstico",
+                command=self._reiniciar_diagnostico,
+                fg_color=SKGREEN,
+                hover_color=SKGREEN_HOVER,
+                text_color="white",
+                corner_radius=22,
+                height=44,
+                font=("Segoe UI", 14, "bold"),
+                border_width=1,
+                border_color="#1E6B38",
+            )
+            btn_reiniciar.pack(fill="x", padx=30, pady=(0, 14))
+            self._btn_reiniciar_hoja = btn_reiniciar
+            self._procesando = False
+
+        self.ventana.after(0, mostrar_boton)
 
     def _ejecutar_spotify(self) -> None:
         nodo = self.motor.obtener_nodo_actual()
         if not nodo.get("spotify_query"):
             return
-
         threading.Thread(target=self._resolver_playlist_async, daemon=True).start()
 
     def _resolver_playlist_async(self) -> None:
@@ -286,11 +413,14 @@ class ChatbotSBCApp:
         desc = resultado.get("descripcion", "")
 
         mensaje_playlist = (
-            f"🎵 **Playlist recomendada**: {nombre}\n\n"
+            f"Playlist recomendada: {nombre}\n\n"
             f"{desc}\n\n"
-            f"🔗 {url}"
+            f"Escúchala aquí: {url}"
         )
         self.ventana.after(0, lambda: self._agregar_mensaje(mensaje_playlist))
+
+        if url:
+            webbrowser.open(url)
 
         if self.token_spotify:
             self._intentar_reproduccion(resultado)
@@ -302,37 +432,25 @@ class ChatbotSBCApp:
             resultado = spotify.reproducir_playlist(sp, uri)
             if resultado == "ok":
                 self.ventana.after(0, lambda: self._agregar_mensaje(
-                    "Reproduciendo en tu dispositivo activo 🎧"
+                    "Reproduciendo en tu dispositivo activo"
                 ))
                 return
             elif resultado == "free_account":
-                self._mostrar_enlace_spotify(playlist, "Cuenta Free")
+                pass
             elif resultado == "no_device":
                 self._mostrar_sin_dispositivo(playlist)
             else:
-                self._mostrar_enlace_spotify(playlist, "Error")
+                pass
         except Exception as e:
             logger.error(f"Error reproducción: {e}")
-            self._mostrar_enlace_spotify(playlist, "Error")
-
-    def _mostrar_enlace_spotify(self, playlist: dict, motivo: str = "") -> None:
-        url = playlist.get("url", "")
-        nombre = playlist.get("nombre", "Playlist")
-        if url:
-            msg = f"🔗 **{nombre}**\n{url}"
-            self.ventana.after(0, lambda: self._agregar_mensaje(msg))
 
     def _mostrar_sin_dispositivo(self, playlist: dict) -> None:
-        url = playlist.get("url", "")
-        nombre = playlist.get("nombre", "Playlist")
         msg = (
             "No encontré un dispositivo de Spotify activo. "
             "Abre Spotify en tu celular o computadora, "
-            "selecciona una canción para activar el dispositivo, "
-            "y vuelve aquí para intentar de nuevo."
+            "reproduce algo para activarlo, y vuelve aquí."
         )
         self.ventana.after(0, lambda: self._agregar_mensaje(msg))
-        self._mostrar_enlace_spotify(playlist)
 
     def _iniciar_sesion_spotify(self) -> None:
         global _callback_code, _callback_event
@@ -348,7 +466,7 @@ class ChatbotSBCApp:
             auth_url = oauth.get_authorize_url()
             webbrowser.open(auth_url)
             self._agregar_mensaje(
-                "Se ha abierto el navegador para que autorices la conexión con Spotify. "
+                "Se abrió el navegador para autorizar Spotify. "
                 "Después de autorizar, vuelve aquí."
             )
             threading.Thread(
@@ -364,7 +482,7 @@ class ChatbotSBCApp:
         except Exception as e:
             logger.error(f"Error al iniciar sesión Spotify: {e}")
             self._agregar_mensaje(
-                "Hubo un error al iniciar la sesión de Spotify. "
+                "Hubo un error al iniciar sesión de Spotify. "
                 "Verifica tus credenciales en el archivo .env"
             )
 
@@ -378,7 +496,7 @@ class ChatbotSBCApp:
                 else:
                     self.token_spotify = resultado
                 self.ventana.after(0, lambda: self._agregar_mensaje(
-                    "✅ Sesión de Spotify iniciada correctamente."
+                    "Conexión con Spotify exitosa."
                 ))
             except Exception as e:
                 logger.error(f"Error al obtener token: {e}")
@@ -394,11 +512,15 @@ class ChatbotSBCApp:
 
     def _reiniciar_diagnostico(self) -> None:
         self.motor.reiniciar()
-        self._limpiar_botones()
         self._nodo_anterior = None
+        self._procesando = False
+        self._fallos_consecutivos = 0
         self._chat.configure(state="normal")
         self._chat.delete("1.0", "end")
         self._chat.configure(state="disabled")
+        if hasattr(self, '_btn_reiniciar_hoja'):
+            self._btn_reiniciar_hoja.destroy()
+            del self._btn_reiniciar_hoja
         self._iniciar_conversacion()
 
     def ejecutar(self) -> None:
