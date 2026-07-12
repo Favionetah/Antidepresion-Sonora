@@ -10,3 +10,6 @@ dist/
 # Python cache
 __pycache__/
 *.py[cod]
+
+# Spotify OAuth cache
+.cache
