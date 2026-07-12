@@ -13,7 +13,11 @@ from chatbot import spotify
 from chatbot.frases import (
     construir_mensaje_confirmacion,
     construir_mensaje_diagnostico,
+    construir_mensaje_empatico,
+    construir_clarificacion_empatica,
+    construir_mensaje_feedback,
 )
+from chatbot.emociones import detectar_emocion
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +125,7 @@ class ChatbotSBCApp:
         self.token_spotify: Optional[str] = None
         self._procesando = False
         self._fallos_consecutivos = 0
+        self._esperando_feedback = False
         self._construir_gui()
         self._iniciar_conversacion()
 
@@ -264,14 +269,54 @@ class ChatbotSBCApp:
         threading.Thread(target=self._procesar_texto_usuario, args=(texto,), daemon=True).start()
 
     def _procesar_texto_usuario(self, texto: str) -> None:
-        idx = self.motor.match_intencion(texto)
-        if idx is None:
+        if self._esperando_feedback:
+            self.sesion.feedback_recomendacion = texto
+            self._agregar_mensaje(texto, es_usuario=True)
+            self._esperando_feedback = False
+            msg = "Gracias por tu opinión. Me ayuda a mejorar las recomendaciones para ti."
+            self._agregar_mensaje_con_efecto(msg)
+            self._procesando = False
+            return
+
+        resultado = self.motor.procesar_texto(texto)
+
+        if resultado["tipo"] == "opcion":
+            self._fallos_consecutivos = 0
+            self.ventana.after(0, lambda: self._ejecutar_opcion(resultado["indice"]))
+        elif resultado["tipo"] == "redireccion":
+            self._fallos_consecutivos = 0
+            self._agregar_mensaje(texto, es_usuario=True)
+            self._manejar_redireccion(resultado["sugerencia"])
+        else:
             self._fallos_consecutivos += 1
             self._agregar_mensaje(texto, es_usuario=True)
             self._pedir_clarificacion()
+
+    def _manejar_redireccion(self, sugerencia: dict) -> None:
+        destinos = sugerencia.get("destinos", [])
+        opciones = self.motor.obtener_opciones()
+        nombres = []
+        indices = []
+        for i, o in enumerate(opciones):
+            if o.get("destino", "") in destinos:
+                nombres.append(o["texto"].split("(")[0].strip().lower())
+                indices.append(i)
+        if nombres:
+            msg = (
+                f"Por cómo te expresas, parece que estás experimentando "
+                f"algo más de tipo emocional. "
+                f"¿Te parece que {nombres[0]} describe mejor lo que sientes?"
+            )
+            if len(nombres) > 1:
+                opciones_str = " o ".join(nombres)
+                msg = (
+                    f"Por cómo te expresas, lo que cuentas parece más cercano a "
+                    f"{opciones_str}. ¿Cuál resuena más contigo?"
+                )
+            self._agregar_mensaje_con_efecto(msg)
         else:
-            self._fallos_consecutivos = 0
-            self.ventana.after(0, lambda: self._ejecutar_opcion(idx))
+            self._pedir_clarificacion()
+        self._procesando = False
 
     def _pedir_clarificacion(self) -> None:
         fallos = self._fallos_consecutivos
@@ -282,16 +327,33 @@ class ChatbotSBCApp:
             return
 
         if fallos == 1:
-            msg = "Cuéntame un poco más para entenderte mejor."
+            empatica = construir_clarificacion_empatica(self.sesion, opciones)
+            if empatica:
+                msg = empatica
+            else:
+                mensaje_empatico = self.motor.obtener_mensaje_empatico()
+                if mensaje_empatico:
+                    msg = mensaje_empatico
+                else:
+                    msg = "Cuéntame un poco más para entenderte mejor."
         elif fallos == 2:
             textos = [o["texto"].split("(")[0].strip().lower() for o in opciones]
             n = len(textos)
-            if n == 1:
-                msg = f"¿Te parece que {textos[0]} describe lo que sientes?"
-            elif n == 2:
-                msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]} o {textos[1]}?"
+            emotion = self.sesion.emotion_principal
+            if emotion != "neutral":
+                if n == 1:
+                    msg = f"Por lo que dices, ¿{textos[0]} describe lo que sientes?"
+                elif n == 2:
+                    msg = f"¿Lo que sientes se parece más a {textos[0]} o a {textos[1]}?"
+                else:
+                    msg = f"¿Lo que sientes se acerca más a {textos[0]}, {textos[1]} o {textos[2]}?"
             else:
-                msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]}, {textos[1]} o {textos[2]}?"
+                if n == 1:
+                    msg = f"¿Te parece que {textos[0]} describe lo que sientes?"
+                elif n == 2:
+                    msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]} o {textos[1]}?"
+                else:
+                    msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]}, {textos[1]} o {textos[2]}?"
         else:
             palabras_clave = []
             for o in opciones:
@@ -371,25 +433,9 @@ class ChatbotSBCApp:
         self._agregar_mensaje_con_efecto(diagnostico)
         self._ejecutar_spotify()
 
-        def mostrar_boton():
-            btn_reiniciar = ctk.CTkButton(
-                self._chat_frame,
-                text="Realizar nuevo diagnóstico",
-                command=self._reiniciar_diagnostico,
-                fg_color=SKGREEN,
-                hover_color=SKGREEN_HOVER,
-                text_color="white",
-                corner_radius=22,
-                height=44,
-                font=("Segoe UI", 14, "bold"),
-                border_width=1,
-                border_color="#1E6B38",
-            )
-            btn_reiniciar.pack(fill="x", padx=30, pady=(0, 14))
-            self._btn_reiniciar_hoja = btn_reiniciar
+        def mostrar_contenido():
             self._procesando = False
-
-        self.ventana.after(0, mostrar_boton)
+        self.ventana.after(0, mostrar_contenido)
 
     def _ejecutar_spotify(self) -> None:
         nodo = self.motor.obtener_nodo_actual()
@@ -401,11 +447,9 @@ class ChatbotSBCApp:
         nodo = self.motor.obtener_nodo_actual()
         resultado = spotify.resolver_playlist(nodo)
         if resultado is None:
-            msg = (
-                "No pude obtener la playlist en este momento. "
-                "Puedes intentarlo de nuevo más tarde."
-            )
+            msg = "No pude obtener la playlist en este momento. Puedes intentarlo de nuevo más tarde."
             self.ventana.after(0, lambda: self._agregar_mensaje(msg))
+            self.ventana.after(0, lambda: self._mostrar_boton_reiniciar())
             return
 
         nombre = resultado.get("nombre", "Playlist recomendada")
@@ -424,6 +468,36 @@ class ChatbotSBCApp:
 
         if self.token_spotify:
             self._intentar_reproduccion(resultado)
+
+        self.sesion.registrar_recomendacion(resultado)
+
+        self.ventana.after(2000, self._mostrar_boton_reiniciar)
+        self.ventana.after(1000, self._preguntar_feedback)
+
+    def _preguntar_feedback(self) -> None:
+        msg = construir_mensaje_feedback()
+        self._agregar_mensaje_con_efecto(msg)
+        self._esperando_feedback = True
+        self._procesando = False
+
+    def _mostrar_boton_reiniciar(self) -> None:
+        if hasattr(self, '_btn_reiniciar_hoja'):
+            return
+        btn_reiniciar = ctk.CTkButton(
+            self._chat_frame,
+            text="Realizar nuevo diagnóstico",
+            command=self._reiniciar_diagnostico,
+            fg_color=SKGREEN,
+            hover_color=SKGREEN_HOVER,
+            text_color="white",
+            corner_radius=22,
+            height=44,
+            font=("Segoe UI", 14, "bold"),
+            border_width=1,
+            border_color="#1E6B38",
+        )
+        btn_reiniciar.pack(fill="x", padx=30, pady=(0, 14))
+        self._btn_reiniciar_hoja = btn_reiniciar
 
     def _intentar_reproduccion(self, playlist: dict) -> None:
         try:
@@ -515,6 +589,7 @@ class ChatbotSBCApp:
         self._nodo_anterior = None
         self._procesando = False
         self._fallos_consecutivos = 0
+        self._esperando_feedback = False
         self._chat.configure(state="normal")
         self._chat.delete("1.0", "end")
         self._chat.configure(state="disabled")

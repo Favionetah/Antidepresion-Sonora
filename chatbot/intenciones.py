@@ -8,7 +8,7 @@ SINONIMOS: dict[str, list[str]] = {
               "taquicardia", "palpitaciones", "opresion", "pecho", "tension", "insomnio", "dolor"],
     "tension": ["tenso", "tensa", "tirante", "contracto", "rigido", "estresado"],
     "insomnio": ["dormir", "sueno", "desvelo", "insomne", "descansar", "dormido"],
-    "dolor": ["duele", "dolorido", "molestia", "padecimiento", "dolores", "adolorido"],
+    "dolor": ["duele", "dolorido", "molestia", "padecimiento", "dolores", "adolorido", "cansancio", "fatiga", "agotamiento"],
     "taquicardia": ["palpitaciones", "ritmo", "latiendo", "cardiaco", "corazon"],
     "opresion": ["pecho", "oprimido", "apretado", "presion", "ahogo", "respirar"],
     "panico": ["crisis", "ataque", "miedo", "angustia", "desesperacion", "nervios"],
@@ -16,16 +16,21 @@ SINONIMOS: dict[str, list[str]] = {
     "bloqueo": ["bloqueado", "trabado", "estancado", "en blanco", "vacio", "nublado"],
     "concentracion": ["concentrar", "enfocar", "atencion", "distraer", "foco", "disperso"],
     "overthinking": ["acelerado", "vuelta", "rumiar", "insistir", "repetitivo"],
-    "emocional": ["sentimiento", "animo", "afectivo", "sentir"],
+    "emocional": ["sentimiento", "animo", "afectivo", "sentir", "ansiedad", "estado de animo"],
     "irritabilidad": ["irritable", "enojo", "ira", "frustrado", "molesto", "enojado", "rabia"],
     "tristeza": ["triste", "desanimo", "apatia", "melancolia", "deprimido", "bajo", "llorar"],
     "agudo": ["repentino", "intenso", "fuerte", "grave", "urgente"],
     "cronico": ["constante", "persistente", "continuo", "permanente", "diario", "siempre"],
-    "cansancio": ["fatiga", "agotado", "pesado", "debilitado", "somnoliento"],
+    "cansancio": ["fatiga", "agotado", "pesado", "debilitado", "somnoliento", "sin energia",
+                   "decaimiento", "debilidad"],
     "calma": ["relajar", "relajacion", "tranquilo", "paz", "sereno", "bajar"],
     "energia": ["liberar", "descargar", "canalizar", "soltar", "expresar", "sacar"],
+    "falta": ["falta", "carencia", "ausencia", "sin"],
     "foco": ["enfoque", "concentrar", "estudio", "trabajo", "productividad", "atento"],
     "sueno": ["dormir", "descanso", "profundo", "delta", "adormecer"],
+    "ansiedad": ["ansioso", "nervioso", "inquieto", "preocupado", "angustia", "intranquilo"],
+    "frustracion": ["frustrado", "frustra", "insatisfecho", "decepcionado", "fracaso"],
+    "palpitacion": ["palpitaciones", "latiendo", "ritmo acelerado", "corazon acelerado"],
 }
 
 STEMMAP: dict[str, str] = {
@@ -55,6 +60,13 @@ STEMMAP: dict[str, str] = {
     "sentir": "emocional",
     "cuerpo": "fisico",
     "nervioso": "panico",
+    "ansiedad": "ansiedad",
+    "ansioso": "ansiedad",
+    "irritable": "irritabilidad",
+    "palpitacion": "palpitacion",
+    "energia": "cansancio",
+    "fuerza": "cansancio",
+    "vitalidad": "cansancio",
 }
 
 STOPWORDS = {
@@ -103,9 +115,32 @@ def _normalizar(texto: str) -> str:
     return texto
 
 
+def _quitar_cliticos(t: str) -> str:
+    if t.endswith("rnos") and len(t) > 6:
+        return t[:-3]
+    if t.endswith("rme") and len(t) > 5:
+        return t[:-2]
+    if t.endswith("rte") and len(t) > 5:
+        return t[:-2]
+    if t.endswith("rse") and len(t) > 5:
+        return t[:-2]
+    if t.endswith("rle") and len(t) > 5:
+        return t[:-2]
+    if t.endswith("rlo") and len(t) > 5:
+        return t[:-2]
+    if t.endswith("rla") and len(t) > 5:
+        return t[:-2]
+    if t.endswith("ndo") and len(t) > 5:
+        return t[:-3]
+    if t.endswith("nos") and len(t) > 5:
+        return t[:-3]
+    return t
+
+
 def _stem(tokens: list[str]) -> list[str]:
     stems = []
     for t in tokens:
+        t = _quitar_cliticos(t)
         if t in STEMMAP:
             stems.append(STEMMAP[t])
         elif t.endswith("os") and len(t) > 3:
@@ -170,16 +205,76 @@ def _extraer_keywords(texto: str) -> set[str]:
     return _expandir_con_sinonimos(tokens)
 
 
+def _ngrams(texto: str, n: int = 3) -> set[str]:
+    limpio = _normalizar(texto)
+    limpio = re.sub(r"\s+", "", limpio)
+    return set(limpio[i:i+n] for i in range(len(limpio)-n+1)) if len(limpio) >= n else {limpio}
+
+
+def _similitud_ngrams(a: str, b: str) -> float:
+    ngrams_a = _ngrams(a)
+    ngrams_b = _ngrams(b)
+    if not ngrams_a or not ngrams_b:
+        return 0.0
+    interseccion = ngrams_a & ngrams_b
+    union = ngrams_a | ngrams_b
+    return len(interseccion) / max(len(union), 1)
+
+
+def _extraer_keywords_de_opcion(texto_opcion: str) -> set[str]:
+    resultados = set()
+    parentesis = texto_opcion.split("(")
+    if len(parentesis) > 1:
+        contenido = parentesis[1].rstrip(")")
+        for kw in contenido.split(","):
+            kw = kw.strip()
+            if kw:
+                resultados.update(_extraer_keywords(kw))
+    parte_principal = _extraer_keywords(parentesis[0])
+    resultados.update(parte_principal)
+    return resultados
+
+
+def _mejor_coincidencia_lexica(texto_usuario: str, opciones: list[dict]) -> Optional[int]:
+    limpio = _normalizar(texto_usuario)
+    palabras_usuario = set(limpio.split())
+
+    mejor_idx: Optional[int] = None
+    mejor_puntaje = 0
+
+    for i, opcion in enumerate(opciones):
+        texto_opcion = _normalizar(opcion["texto"])
+        palabras_opcion = set(texto_opcion.split())
+
+        if not palabras_opcion:
+            continue
+
+        coincidencias = palabras_usuario & palabras_opcion
+        n_coincidencias = len(coincidencias)
+        if n_coincidencias == 0:
+            continue
+
+        puntaje = n_coincidencias / max(len(palabras_opcion), 1)
+        if puntaje > mejor_puntaje:
+            mejor_puntaje = puntaje
+            mejor_idx = i
+
+    if mejor_idx is not None and mejor_puntaje >= 0.25:
+        return mejor_idx
+    return None
+
+
 def match_intencion(texto_usuario: str, opciones: list[dict]) -> Optional[int]:
     if not opciones:
         return None
+
     keywords_usuario = _extraer_keywords(texto_usuario)
     if not keywords_usuario:
         return None
 
     keywords_opciones = []
     for opcion in opciones:
-        kws = _extraer_keywords(opcion["texto"])
+        kws = _extraer_keywords_de_opcion(opcion["texto"])
         keywords_opciones.append(kws)
 
     mejor_idx: Optional[int] = None
@@ -192,13 +287,17 @@ def match_intencion(texto_usuario: str, opciones: list[dict]) -> Optional[int]:
         n_coincidencias = len(coincidencias)
         if n_coincidencias == 0:
             continue
-        puntaje = n_coincidencias / max(len(coincidencias | (kws_opcion - keywords_usuario)), 1)
-        if puntaje > mejor_puntaje:
-            mejor_puntaje = puntaje
+        if n_coincidencias > mejor_puntaje:
+            mejor_puntaje = n_coincidencias
             mejor_idx = i
 
-    if mejor_idx is not None and mejor_puntaje > 0:
+    if mejor_idx is not None:
         return mejor_idx
+
+    lexico = _mejor_coincidencia_lexica(texto_usuario, opciones)
+    if lexico is not None:
+        return lexico
+
     return None
 
 

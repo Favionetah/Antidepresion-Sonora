@@ -2,13 +2,35 @@ from typing import Optional
 
 from .base_conocimiento import BaseConocimiento
 from .contexto import SesionSBC
+from .emociones import detectar_emocion, emocion_a_rama
 from .frases import (
     construir_mensaje_inicial,
     construir_mensaje_confirmacion,
     construir_mensaje_diagnostico,
     construir_mensaje_transicion,
+    construir_mensaje_empatico,
 )
 from .intenciones import match_intencion, match_numero
+
+
+EMOCIONES_ESPERADAS_POR_NODO: dict[str, list[str]] = {
+    "N01": ["neutral"],
+    "N02": ["miedo", "neutral"],
+    "N03": ["miedo", "tristeza", "neutral"],
+    "N04": ["enojo", "tristeza", "neutral"],
+    "N05": ["miedo"],
+    "N06": ["tristeza", "neutral"],
+    "N07": ["frustracion", "neutral"],
+    "N08": ["miedo", "ansiedad"],
+    "N09": ["enojo", "frustracion"],
+    "N10": ["tristeza"],
+    "N11": ["miedo"],
+    "N12": ["miedo"],
+    "N13": ["tristeza", "neutral"],
+    "N14": ["neutral"],
+    "N15": ["miedo", "neutral"],
+    "N16": ["enojo", "frustracion"],
+}
 
 
 class MotorFSM:
@@ -64,12 +86,63 @@ class MotorFSM:
             return None
         return opciones[indice_opcion]
 
+    def procesar_texto(self, texto: str) -> dict:
+        resultado_emocion = detectar_emocion(texto)
+        self.sesion.actualizar_emocion(resultado_emocion)
+        self.sesion.ultimo_texto_usuario = texto
+
+        idx = self.match_intencion(texto)
+        if idx is not None:
+            return {"tipo": "opcion", "indice": idx, "emocion": resultado_emocion}
+
+        redireccion = self._evaluar_redireccion_emocional(resultado_emocion)
+        if redireccion:
+            return {
+                "tipo": "redireccion",
+                "sugerencia": redireccion,
+                "emocion": resultado_emocion,
+            }
+
+        return {"tipo": "no_match", "emocion": resultado_emocion}
+
     def match_intencion(self, texto: str) -> Optional[int]:
         opciones = self.obtener_opciones()
         idx = match_numero(texto, opciones)
         if idx is not None:
             return idx
         return match_intencion(texto, opciones)
+
+    def _evaluar_redireccion_emocional(self, resultado_emocion: dict) -> Optional[dict]:
+        emotion = resultado_emocion["principal"]
+        intensidad = resultado_emocion["intensidad"]
+        if emotion == "neutral" or intensidad != "alta":
+            return None
+
+        nodo_id = self.estado_actual
+        esperadas = EMOCIONES_ESPERADAS_POR_NODO.get(nodo_id, ["neutral"])
+        if emotion in esperadas:
+            return None
+
+        ramas_alternativas = emocion_a_rama(emotion)
+        if not ramas_alternativas or not self.es_accesible(ramas_alternativas):
+            return None
+
+        return {
+            "emocion": emotion,
+            "intensidad": intensidad,
+            "destinos": ramas_alternativas,
+        }
+
+    def es_accesible(self, destinos: list[str]) -> bool:
+        opciones = self.obtener_opciones()
+        destinos_opciones = {o.get("destino", "") for o in opciones}
+        for d in destinos:
+            if d in destinos_opciones:
+                return True
+        return False
+
+    def obtener_mensaje_empatico(self) -> Optional[str]:
+        return construir_mensaje_empatico(self.sesion)
 
     def reiniciar(self) -> None:
         self.sesion.reiniciar()
