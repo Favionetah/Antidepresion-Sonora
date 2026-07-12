@@ -11,14 +11,15 @@ from config import TELEGRAM_BOT_TOKEN, OAUTH_HOST, OAUTH_PORT
 from telegram_bot import (
     Application,
     CommandHandler,
-    CallbackQueryHandler,
+    MessageHandler,
+    filters,
     cmd_start,
     cmd_help,
     cmd_about,
     cmd_reset,
     cmd_spotify,
     cmd_diagnostico,
-    callback_handler,
+    handle_message,
     error_handler,
 )
 from oauth_callback_server import iniciar_servidor_oauth
@@ -48,11 +49,11 @@ def main() -> None:
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(CommandHandler("spotify", cmd_spotify))
     app.add_handler(CommandHandler("diagnostico", cmd_diagnostico))
-    app.add_handler(CallbackQueryHandler(callback_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(error_handler)
 
     logger.info("Bot de Telegram iniciado. Presiona Ctrl+C para detener.")
-    app.run_polling(allowed_updates=["message", "callback_query"])
+    app.run_polling(allowed_updates=["message"])
 
 
 if __name__ == "__main__":

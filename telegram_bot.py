@@ -1,21 +1,29 @@
 import logging
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
-    CallbackQueryHandler,
+    MessageHandler,
+    filters,
     ContextTypes,
 )
 
 from chatbot import MotorFSM, SesionSBC
 from chatbot import spotify
-from chatbot.frases import construir_mensaje_confirmacion
+from chatbot.frases import (
+    construir_mensaje_confirmacion,
+    construir_mensaje_empatico,
+    construir_clarificacion_empatica,
+    construir_mensaje_feedback,
+)
 
 logger = logging.getLogger(__name__)
 
 SESIONES: dict[int, SesionSBC] = {}
+FALLOS: dict[int, int] = {}
+ESPERANDO_FEEDBACK: dict[int, bool] = {}
 
 
 def _obtener_sesion(chat_id: int) -> SesionSBC:
@@ -29,25 +37,16 @@ def _obtener_motor(chat_id: int) -> MotorFSM:
     return MotorFSM(sesion)
 
 
-def _construir_teclado(opciones: list[dict]) -> InlineKeyboardMarkup:
-    teclado = []
-    for i, opcion in enumerate(opciones):
-        destino = opcion.get("destino", "")
-        callback_data = f"goto:{destino}:{i}"
-        teclado.append([InlineKeyboardButton(opcion["texto"], callback_data=callback_data)])
-    return InlineKeyboardMarkup(teclado)
-
-
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     if chat_id in SESIONES:
         SESIONES[chat_id].reiniciar()
+    FALLOS[chat_id] = 0
+    ESPERANDO_FEEDBACK[chat_id] = False
     sesion = _obtener_sesion(chat_id)
     motor = MotorFSM(sesion)
     mensaje = motor.obtener_pregunta()
-    opciones = motor.obtener_opciones()
-    reply_markup = _construir_teclado(opciones) if opciones else None
-    await update.message.reply_text(mensaje, reply_markup=reply_markup)
+    await update.message.reply_text(mensaje)
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -62,7 +61,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/reset - Reiniciar tu sesión\n"
         "/spotify - Obtener playlist o conectar Spotify\n"
         "/diagnostico - Ver tu diagnóstico actual\n\n"
-        "Responde a las preguntas tocando los botones. "
+        "Cuéntame cómo te sientes con tus propias palabras. "
         "Al final recibirás una playlist recomendada personalizada."
     )
     await update.message.reply_text(texto, parse_mode="Markdown")
@@ -75,7 +74,7 @@ async def cmd_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "y prescripción personalizada de musicoterapia mediante Spotify.\n\n"
         "*Versión:* 2.0 (Fase 2 - Integración Híbrida)\n"
         "*Desarrollado con:* Python, CustomTkinter, python-telegram-bot, Spotipy\n"
-        "*Arquitectura:* Clean Architecture + FSM + SBC"
+        "*Arquitectura:* Clean Architecture + FSM + SBC + Emociones"
     )
     await update.message.reply_text(texto, parse_mode="Markdown")
 
@@ -84,6 +83,8 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     if chat_id in SESIONES:
         SESIONES[chat_id].reiniciar()
+    FALLOS[chat_id] = 0
+    ESPERANDO_FEEDBACK[chat_id] = False
     await update.message.reply_text(
         "Tu sesión ha sido reiniciada. Usa /start para comenzar de nuevo."
     )
@@ -150,95 +151,210 @@ async def cmd_diagnostico(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(resumen, parse_mode="Markdown")
 
 
-async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
-    data = query.data
-
-    if not data.startswith("goto:"):
+    texto = update.message.text.strip()
+    if not texto:
         return
 
-    partes = data.split(":")
-    if len(partes) < 3:
+    if chat_id not in SESIONES:
+        SESIONES[chat_id] = SesionSBC()
+        FALLOS[chat_id] = 0
+        ESPERANDO_FEEDBACK[chat_id] = False
+        motor = MotorFSM(SESIONES[chat_id])
+        mensaje = motor.obtener_pregunta()
+        await update.message.reply_text(mensaje)
         return
 
-    _, destino, idx_str = partes[:3]
-    indice = int(idx_str)
+    if ESPERANDO_FEEDBACK.get(chat_id):
+        ESPERANDO_FEEDBACK[chat_id] = False
+        SESIONES[chat_id].feedback_recomendacion = texto
+        await update.message.reply_text(
+            "Gracias por tu opinión. Me ayuda a mejorar las recomendaciones para ti.\n\n"
+            "¿Quieres realizar otro diagnóstico? Usa /start para comenzar de nuevo."
+        )
+        return
 
     sesion = _obtener_sesion(chat_id)
     motor = MotorFSM(sesion)
+    resultado = motor.procesar_texto(texto)
 
+    if resultado["tipo"] == "opcion":
+        FALLOS[chat_id] = 0
+        await _ejecutar_opcion(update, motor, sesion, resultado["indice"])
+    elif resultado["tipo"] == "redireccion":
+        FALLOS[chat_id] = 0
+        await _manejar_redireccion(update, motor, resultado["sugerencia"])
+    else:
+        FALLOS[chat_id] = FALLOS.get(chat_id, 0) + 1
+        await _pedir_clarificacion(update, motor, sesion)
+
+
+async def _ejecutar_opcion(
+    update: Update, motor: MotorFSM, sesion: SesionSBC, indice: int
+) -> None:
     opcion = motor.obtener_info_opcion(indice)
     if not opcion:
-        await query.edit_message_text(
+        await update.message.reply_text(
             "Esta opción ya no está disponible. Usa /start para comenzar de nuevo."
         )
         return
 
-    motor.transicionar(indice)
+    texto_opcion = opcion["texto"]
+    destino = motor.transicionar(indice)
+    if not destino:
+        await update.message.reply_text(
+            "Hubo un error al procesar tu respuesta. Usa /start para reiniciar."
+        )
+        return
+
+    nodo_origen = motor.obtener_nodo_actual()
+    confirmacion = construir_mensaje_confirmacion(
+        nodo_origen, sesion, texto_opcion
+    )
 
     if motor.es_nodo_hoja():
-        await _procesar_nodo_hoja(query, motor, sesion)
+        await _procesar_nodo_hoja(update, motor, sesion, confirmacion)
     else:
-        await _procesar_nodo_decision(query, motor, opcion)
-
-
-async def _procesar_nodo_decision(
-    query, motor: MotorFSM, opcion: dict
-) -> None:
-    mensaje = motor.obtener_pregunta()
-    opciones = motor.obtener_opciones()
-    reply_markup = _construir_teclado(opciones) if opciones else None
-
-    texto_respuesta = f"{opcion['texto']}\n\n{mensaje}"
-    await query.edit_message_text(texto_respuesta, reply_markup=reply_markup)
+        mensaje = motor.obtener_pregunta()
+        await update.message.reply_text(f"{confirmacion}\n\n{mensaje}")
 
 
 async def _procesar_nodo_hoja(
-    query, motor: MotorFSM, sesion: SesionSBC
+    update: Update, motor: MotorFSM, sesion: SesionSBC, confirmacion: str
 ) -> None:
     diagnostico = motor.obtener_diagnostico()
-    mensaje_base = f"{diagnostico}"
-
-    await query.edit_message_text(mensaje_base, parse_mode="Markdown")
+    await update.message.reply_text(f"{confirmacion}\n\n{diagnostico}", parse_mode="Markdown")
 
     nodo = motor.obtener_nodo_actual()
-    if nodo.get("spotify_query"):
-        resultado = spotify.resolver_playlist(nodo)
-        if resultado:
-            sesion.playlist_recomendada = resultado
-            playlist_msg = (
-                f"🎵 *Playlist recomendada:*\n"
-                f"{resultado.get('nombre', '')}\n"
-                f"{resultado.get('url', '')}"
-            )
-            await query.message.reply_text(playlist_msg, parse_mode="Markdown")
+    if not nodo.get("spotify_query"):
+        await update.message.reply_text(
+            "¿Quieres realizar otro diagnóstico? Usa /start para comenzar de nuevo."
+        )
+        return
 
-            if sesion.token_spotify:
-                try:
-                    sp = spotify.crear_cliente(sesion.token_spotify)
-                    uri = f"spotify:playlist:{resultado['id']}"
-                    resultado = spotify.reproducir_playlist(sp, uri)
-                    if resultado == "ok":
-                        await query.message.reply_text("Reproduciendo en tu dispositivo activo 🎧")
-                    elif resultado == "no_device":
-                        await query.message.reply_text(
-                            "Para reproducir automáticamente, abre Spotify en tu "
-                            "celular o computadora y selecciona una canción."
-                        )
-                except Exception as e:
-                    logger.error(f"Error reproducción Telegram: {e}")
+    resultado = spotify.resolver_playlist(nodo)
+    if resultado:
+        sesion.playlist_recomendada = resultado
+        playlist_msg = (
+            f"🎵 *Playlist recomendada:*\n"
+            f"{resultado.get('nombre', '')}\n"
+            f"{resultado.get('url', '')}"
+        )
+        await update.message.reply_text(playlist_msg, parse_mode="Markdown")
+
+        if sesion.token_spotify:
+            try:
+                sp = spotify.crear_cliente(sesion.token_spotify)
+                uri = f"spotify:playlist:{resultado['id']}"
+                res = spotify.reproducir_playlist(sp, uri)
+                if res == "ok":
+                    await update.message.reply_text("Reproduciendo en tu dispositivo activo 🎧")
+                elif res == "no_device":
+                    await update.message.reply_text(
+                        "Para reproducir automáticamente, abre Spotify en tu "
+                        "celular o computadora y selecciona una canción."
+                    )
+            except Exception as e:
+                logger.error(f"Error reproducción Telegram: {e}")
+
+        sesion.registrar_recomendacion(resultado)
+        await _preguntar_feedback(update)
+    else:
+        await update.message.reply_text(
+            "No pude obtener la playlist en este momento. "
+            "Intenta de nuevo más tarde con /spotify."
+        )
+
+
+async def _preguntar_feedback(update: Update) -> None:
+    chat_id = update.effective_chat.id
+    msg = construir_mensaje_feedback()
+    ESPERANDO_FEEDBACK[chat_id] = True
+    await update.message.reply_text(msg)
+
+
+async def _pedir_clarificacion(
+    update: Update, motor: MotorFSM, sesion: SesionSBC
+) -> None:
+    chat_id = update.effective_chat.id
+    fallos = FALLOS.get(chat_id, 0)
+    nodo = motor.obtener_nodo_actual()
+    opciones = nodo.get("opciones", [])
+    if not opciones:
+        return
+
+    if fallos == 1:
+        empatica = construir_clarificacion_empatica(sesion, opciones)
+        if empatica:
+            msg = empatica
         else:
-            await query.message.reply_text(
-                "No pude obtener la playlist en este momento. "
-                "Intenta de nuevo más tarde con /spotify."
+            mensaje_empatico = motor.obtener_mensaje_empatico()
+            if mensaje_empatico:
+                msg = mensaje_empatico
+            else:
+                msg = "Cuéntame un poco más para entenderte mejor."
+    elif fallos == 2:
+        textos = [o["texto"].split("(")[0].strip().lower() for o in opciones]
+        n = len(textos)
+        emotion = sesion.emotion_principal
+        if emotion != "neutral":
+            if n == 1:
+                msg = f"Por lo que dices, ¿{textos[0]} describe lo que sientes?"
+            elif n == 2:
+                msg = f"¿Lo que sientes se parece más a {textos[0]} o a {textos[1]}?"
+            else:
+                msg = f"¿Lo que sientes se acerca más a {textos[0]}, {textos[1]} o {textos[2]}?"
+        else:
+            if n == 1:
+                msg = f"¿Te parece que {textos[0]} describe lo que sientes?"
+            elif n == 2:
+                msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]} o {textos[1]}?"
+            else:
+                msg = f"Déjame preguntarte de otra forma. ¿Lo que sientes es más {textos[0]}, {textos[1]} o {textos[2]}?"
+    else:
+        palabras_clave = []
+        for o in opciones:
+            parentesis = o["texto"].split("(")
+            if len(parentesis) > 1:
+                palabras = parentesis[1].rstrip(")").split(",")
+                palabras_clave.extend(p.strip() for p in palabras[:2])
+        if palabras_clave:
+            ejemplos = ", ".join(palabras_clave[:4])
+            msg = (
+                "Para ayudarte mejor, dime si alguna de estas palabras "
+                f"resuena con lo que sientes: {ejemplos}."
             )
+        else:
+            msg = "Cuéntame con tus palabras cómo te sientes."
+    await update.message.reply_text(msg)
 
-    await query.message.reply_text(
-        "¿Quieres realizar otro diagnóstico? Usa /start para comenzar de nuevo."
-    )
+
+async def _manejar_redireccion(
+    update: Update, motor: MotorFSM, sugerencia: dict
+) -> None:
+    destinos = sugerencia.get("destinos", [])
+    opciones = motor.obtener_opciones()
+    nombres = []
+    for i, o in enumerate(opciones):
+        if o.get("destino", "") in destinos:
+            nombres.append(o["texto"].split("(")[0].strip().lower())
+    if nombres:
+        if len(nombres) > 1:
+            opciones_str = " o ".join(nombres)
+            msg = (
+                f"Por cómo te expresas, lo que cuentas parece más cercano a "
+                f"{opciones_str}. ¿Cuál resuena más contigo?"
+            )
+        else:
+            msg = (
+                f"Por cómo te expresas, parece que estás experimentando "
+                f"algo más de tipo emocional. "
+                f"¿Te parece que {nombres[0]} describe mejor lo que sientes?"
+            )
+    else:
+        msg = "Cuéntame un poco más para entenderte mejor."
+    await update.message.reply_text(msg)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
