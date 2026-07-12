@@ -304,6 +304,7 @@ def _CONSTRUIR_BASE() -> dict[str, dict]:
         ],
         "opciones": [
             {"texto": "Conciliar el sueño con sonidos ambientales densos", "destino": "N13"},
+            {"texto": "Recuperar energía con frecuencias reparadoras", "destino": "N30"},
         ],
         "spotify_query": "",
         "spotify_market": "",
@@ -349,6 +350,7 @@ def _CONSTRUIR_BASE() -> dict[str, dict]:
         ],
         "opciones": [
             {"texto": "Foco profundo con pulsos binaurales", "destino": "N14"},
+            {"texto": "Ritmo constante para fluir con Lo-Fi de enfoque", "destino": "N28"},
         ],
         "spotify_query": "",
         "spotify_market": "",
@@ -394,6 +396,7 @@ def _CONSTRUIR_BASE() -> dict[str, dict]:
         ],
         "opciones": [
             {"texto": "Flujo constante con ritmos Lo-Fi suaves", "destino": "N15"},
+            {"texto": "Calmar la mente con frecuencias tranquilas", "destino": "N29"},
         ],
         "spotify_query": "",
         "spotify_market": "",
@@ -439,6 +442,7 @@ def _CONSTRUIR_BASE() -> dict[str, dict]:
         ],
         "opciones": [
             {"texto": "Descarga rítmica con Post-Rock instrumental", "destino": "N16"},
+            {"texto": "Liberación intensa con música épica instrumental", "destino": "N31"},
         ],
         "spotify_query": "",
         "spotify_market": "",
@@ -889,6 +893,54 @@ def _CONSTRUIR_BASE() -> dict[str, dict]:
                        "y dejar que la música te lleve a través del clímax hasta la resolución.",
         nombre="Post-Rock Instrumental Catártico",
         descripcion="Post-Rock instrumental con crescendos para liberación emocional.",
+    )
+
+    base["N28"] = _nodo_hoja(
+        spotify_query="lo fi hip hop focus beats study concentration",
+        diagnostico="Bloqueo Mental — Activación de Flujo Creativo",
+        recomendacion="Se recomienda Lo-Fi de enfoque para activar el flujo creativo. "
+                       "A diferencia de los binaurales, el Lo-Fi con beats suaves y constantes "
+                       "establece un ritmo mental sin exigir concentración directa. "
+                       "Es ideal para tareas creativas, escritura o lluvia de ideas. "
+                       "Ponlo de fondo mientras trabajas y deja que el ritmo te lleve.",
+        nombre="Lo-Fi Foco Creativo",
+        descripcion="Lo-Fi hip hop para activar flujo creativo y concentración relajada.",
+    )
+
+    base["N29"] = _nodo_hoja(
+        spotify_query="432hz calming music peaceful relaxation",
+        diagnostico="Hiperactividad Mental — Necesidad de Calma y Silencio Interior",
+        recomendacion="Se recomiendan frecuencias calmantes en 432Hz para aquietar la mente acelerada. "
+                       "Esta frecuencia tiene un efecto directo sobre el sistema nervioso, "
+                       "ayudando a disminuir la velocidad de los pensamientos. "
+                       "Siéntate en un lugar tranquilo, cierra los ojos y respira profundo "
+                       "mientras las ondas sonoras envuelven tu mente.",
+        nombre="Frecuencias Calmantes 432Hz",
+        descripcion="Música en 432Hz para calmar la mente acelerada y reducir el ruido mental.",
+    )
+
+    base["N30"] = _nodo_hoja(
+        spotify_query="solfeggio frequencies 528hz 432hz energy renewal",
+        diagnostico="Fatiga Crónica — Necesidad de Reparación Energética",
+        recomendacion="Se recomiendan frecuencias Solfeggio para restaurar la energía vital. "
+                       "La combinación de 528Hz (reparación celular) y 432Hz (armonización) "
+                       "trabaja en conjunto para recuperar el equilibrio energético del cuerpo. "
+                       "Escúchala por la mañana para activar tu energía o durante una pausa "
+                       "para recargar. Acompaña con respiración profunda.",
+        nombre="Frecuencias de Reparación Energética",
+        descripcion="Solfeggio frequencies 528Hz y 432Hz para restaurar energía y vitalidad.",
+    )
+
+    base["N31"] = _nodo_hoja(
+        spotify_query="epic powerful instrumental orchestra cinematic",
+        diagnostico="Frustración — Liberación de Tensión Acumulada",
+        recomendacion="Se recomienda música épica instrumental para liberar la frustración contenida. "
+                       "A diferencia del Post-Rock (más introspectivo), la música épica te invita "
+                       "a sentirte poderoso y en control. Sus orquestaciones grandiosas y percusiones "
+                       "contundentes canalizan la energía del enojo hacia una sensación de victoria. "
+                       "Escúchala a volumen alto, de pie, y déjate llevar por la intensidad.",
+        nombre="Épica Instrumental Liberadora",
+        descripcion="Música épica orquestal para canalizar la frustración y sentirte empoderado.",
     )
 
     return base

@@ -30,6 +30,10 @@ EMOCIONES_ESPERADAS_POR_NODO: dict[str, list[str]] = {
     "N14": ["neutral"],
     "N15": ["miedo", "neutral"],
     "N16": ["enojo", "frustracion"],
+    "N28": ["neutral"],
+    "N29": ["miedo", "neutral"],
+    "N30": ["tristeza", "neutral"],
+    "N31": ["enojo", "frustracion"],
 }
 
 
