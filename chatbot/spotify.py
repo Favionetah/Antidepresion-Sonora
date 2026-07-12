@@ -6,6 +6,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
 from config import SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI, SPOTIFY_MARKET
+from .spotify_cache import obtener as cache_obtener, guardar as cache_guardar
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +39,23 @@ def resolver_playlist(nodo: dict) -> Optional[dict]:
         return None
 
     if query in _cache_playlists:
-        logger.info(f"Usando caché para query: {query}")
+        logger.info(f"Usando caché memoria para: {query}")
         resultado = dict(_cache_playlists[query])
         nodo["spotify_playlist_id"] = resultado["id"]
         nodo["spotify_playlist_url"] = resultado["url"]
         nodo["playlist_nombre"] = resultado["nombre"]
         nodo["playlist_descripcion"] = resultado["descripcion"]
         return resultado
+
+    cache_disco = cache_obtener(query)
+    if cache_disco:
+        logger.info(f"Usando caché disco para: {query}")
+        _cache_playlists[query] = cache_disco
+        nodo["spotify_playlist_id"] = cache_disco["id"]
+        nodo["spotify_playlist_url"] = cache_disco["url"]
+        nodo["playlist_nombre"] = cache_disco["nombre"]
+        nodo["playlist_descripcion"] = cache_disco["descripcion"]
+        return cache_disco
 
     market = nodo.get("spotify_market") or SPOTIFY_MARKET
 
@@ -79,6 +90,7 @@ def resolver_playlist(nodo: dict) -> Optional[dict]:
             }
 
             _cache_playlists[query] = resultado
+            cache_guardar(query, resultado)
 
             nodo["spotify_playlist_id"] = resultado["id"]
             nodo["spotify_playlist_url"] = resultado["url"]

@@ -1,11 +1,12 @@
 import logging
 from typing import Optional
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
     ContextTypes,
 )
@@ -241,29 +242,24 @@ async def _procesar_nodo_hoja(
             f"{resultado.get('nombre', '')}\n"
             f"{resultado.get('url', '')}"
         )
-        await update.message.reply_text(playlist_msg, parse_mode="Markdown")
-
-        if sesion.token_spotify:
-            try:
-                sp = spotify.crear_cliente(sesion.token_spotify)
-                uri = f"spotify:playlist:{resultado['id']}"
-                res = spotify.reproducir_playlist(sp, uri)
-                if res == "ok":
-                    await update.message.reply_text("Reproduciendo en tu dispositivo activo 🎧")
-                elif res == "no_device":
-                    await update.message.reply_text(
-                        "Para reproducir automáticamente, abre Spotify en tu "
-                        "celular o computadora y selecciona una canción."
-                    )
-            except Exception as e:
-                logger.error(f"Error reproducción Telegram: {e}")
+        reply_markup = _construir_teclado_acciones(
+            resultado.get("url", ""),
+            bool(sesion.token_spotify),
+        )
+        await update.message.reply_text(
+            playlist_msg, parse_mode="Markdown",
+            reply_markup=reply_markup,
+        )
 
         sesion.registrar_recomendacion(resultado)
         await _preguntar_feedback(update)
     else:
         await update.message.reply_text(
             "No pude obtener la playlist en este momento. "
-            "Intenta de nuevo más tarde con /spotify."
+            "Intenta de nuevo más tarde con /spotify.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("Nuevo diagnóstico", callback_data="nuevo_diagnostico")
+            ]]),
         )
 
 
@@ -355,6 +351,63 @@ async def _manejar_redireccion(
     else:
         msg = "Cuéntame un poco más para entenderte mejor."
     await update.message.reply_text(msg)
+
+
+def _construir_teclado_acciones(url: str, tiene_token: bool) -> InlineKeyboardMarkup:
+    teclado = []
+    if url:
+        teclado.append([InlineKeyboardButton("Abrir en Spotify", url=url)])
+    if tiene_token:
+        teclado.append([InlineKeyboardButton("Reproducir ahora", callback_data="play_now")])
+    teclado.append([InlineKeyboardButton("Nuevo diagnóstico", callback_data="nuevo_diagnostico")])
+    return InlineKeyboardMarkup(teclado)
+
+
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    chat_id = update.effective_chat.id
+    data = query.data
+
+    if data == "nuevo_diagnostico":
+        if chat_id in SESIONES:
+            SESIONES[chat_id].reiniciar()
+        FALLOS[chat_id] = 0
+        ESPERANDO_FEEDBACK[chat_id] = False
+        sesion = _obtener_sesion(chat_id)
+        motor = MotorFSM(sesion)
+        mensaje = motor.obtener_pregunta()
+        await query.edit_message_text(mensaje)
+        return
+
+    if data == "play_now":
+        sesion = _obtener_sesion(chat_id)
+        if not sesion.token_spotify or not sesion.playlist_recomendada:
+            await query.edit_message_text(
+                "No se pudo reproducir. Conecta tu cuenta con /spotify primero.",
+            )
+            return
+        try:
+            sp = spotify.crear_cliente(sesion.token_spotify)
+            uri = f"spotify:playlist:{sesion.playlist_recomendada['id']}"
+            res = spotify.reproducir_playlist(sp, uri)
+            if res == "ok":
+                await query.edit_message_text("Reproduciendo en tu dispositivo activo 🎧")
+            elif res == "no_device":
+                await query.edit_message_text(
+                    "No encontré un dispositivo activo. Abre Spotify en tu celular "
+                    "o computadora y selecciona una canción primero."
+                )
+            else:
+                await query.edit_message_text(
+                    "Hubo un error al reproducir. Abre Spotify manualmente."
+                )
+        except Exception as e:
+            logger.error(f"Error reproducción callback: {e}")
+            await query.edit_message_text(
+                "Error al reproducir. Intenta abrir Spotify manualmente."
+            )
+        return
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

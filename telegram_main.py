@@ -12,6 +12,7 @@ from telegram_bot import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
     cmd_start,
     cmd_help,
@@ -20,6 +21,7 @@ from telegram_bot import (
     cmd_spotify,
     cmd_diagnostico,
     handle_message,
+    callback_handler,
     error_handler,
 )
 from oauth_callback_server import iniciar_servidor_oauth
@@ -50,10 +52,11 @@ def main() -> None:
     app.add_handler(CommandHandler("spotify", cmd_spotify))
     app.add_handler(CommandHandler("diagnostico", cmd_diagnostico))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)
 
     logger.info("Bot de Telegram iniciado. Presiona Ctrl+C para detener.")
-    app.run_polling(allowed_updates=["message"])
+    app.run_polling(allowed_updates=["message", "callback_query"])
 
 
 if __name__ == "__main__":

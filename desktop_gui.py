@@ -462,17 +462,72 @@ class ChatbotSBCApp:
             f"Escúchala aquí: {url}"
         )
         self.ventana.after(0, lambda: self._agregar_mensaje(mensaje_playlist))
-
-        if url:
-            webbrowser.open(url)
-
-        if self.token_spotify:
-            self._intentar_reproduccion(resultado)
+        self._resultado_playlist = resultado
 
         self.sesion.registrar_recomendacion(resultado)
 
-        self.ventana.after(2000, self._mostrar_boton_reiniciar)
+        self.ventana.after(1500, self._mostrar_acciones_playlist)
         self.ventana.after(1000, self._preguntar_feedback)
+
+    def _mostrar_acciones_playlist(self) -> None:
+        if not hasattr(self, '_resultado_playlist'):
+            self._mostrar_boton_reiniciar()
+            return
+
+        url = self._resultado_playlist.get("url", "")
+
+        def abrir_spotify():
+            if url:
+                webbrowser.open(url)
+
+        def reproducir():
+            if self.token_spotify:
+                threading.Thread(target=lambda: self._intentar_reproduccion(self._resultado_playlist), daemon=True).start()
+            elif url:
+                webbrowser.open(url)
+
+        def nuevo():
+            self._reiniciar_diagnostico()
+
+        marco = ctk.CTkFrame(
+            self._chat_frame, fg_color="transparent",
+        )
+        marco.pack(fill="x", padx=10, pady=(4, 8))
+
+        if url:
+            btn_abrir = ctk.CTkButton(
+                marco, text="Abrir en Spotify",
+                command=abrir_spotify,
+                fg_color=SKGREEN, hover_color=SKGREEN_HOVER,
+                text_color="white", corner_radius=22, height=40,
+                font=("Segoe UI", 13, "bold"),
+                border_width=1, border_color="#1E6B38",
+            )
+            btn_abrir.pack(fill="x", padx=5, pady=3)
+
+        if self.token_spotify:
+            btn_repro = ctk.CTkButton(
+                marco, text="Reproducir ahora",
+                command=reproducir,
+                fg_color=SKAMBER, hover_color=SKGOLD_HOVER,
+                text_color="white", corner_radius=22, height=40,
+                font=("Segoe UI", 13, "bold"),
+                border_width=1, border_color="#B87A28",
+            )
+            btn_repro.pack(fill="x", padx=5, pady=3)
+
+        btn_nuevo = ctk.CTkButton(
+            marco, text="Nuevo diagnóstico",
+            command=nuevo,
+            fg_color=SKPRIMARY, hover_color="#7A5F3A",
+            text_color="white", corner_radius=22, height=40,
+            font=("Segoe UI", 13, "bold"),
+            border_width=1, border_color="#6B4F30",
+        )
+        btn_nuevo.pack(fill="x", padx=5, pady=3)
+
+        self._btn_reiniciar_hoja = marco
+        self._procesando = False
 
     def _preguntar_feedback(self) -> None:
         msg = construir_mensaje_feedback()
@@ -590,6 +645,8 @@ class ChatbotSBCApp:
         self._procesando = False
         self._fallos_consecutivos = 0
         self._esperando_feedback = False
+        if hasattr(self, '_resultado_playlist'):
+            del self._resultado_playlist
         self._chat.configure(state="normal")
         self._chat.delete("1.0", "end")
         self._chat.configure(state="disabled")
