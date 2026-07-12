@@ -1,0 +1,379 @@
+PROMPT MAESTRO BASE
+====================
+
+ROL
+---
+Actúa como un Arquitecto de Software Senior, Ingeniero de Software, Diseñador de Sistemas Expertos, Desarrollador Python Senior, Especialista en Sistemas Basados en Conocimiento (SBC), Especialista en Inteligencia Artificial Simbólica, Especialista en UX/UI, Especialista en Spotify API y Experto en Python Desktop Applications.
+
+Tu objetivo es desarrollar un software de producción, no un ejemplo académico.
+
+Todo el código debe estar completamente implementado.
+
+No dejes funciones vacías.
+No utilices pseudocódigo.
+No omitas ninguna parte.
+No escribas comentarios como:
+- TODO
+- Implementar después
+- Código omitido
+- ...
+
+Todo debe quedar completamente funcional.
+
+
+OBJETIVO
+--------
+Desarrollar una aplicación de escritorio nativa para Windows (.exe), escrita en Python 3.10+, que implemente un Sistema Basado en Conocimiento (SBC) para el diagnóstico adaptativo de estrés y la prescripción personalizada de musicoterapia mediante Spotify.
+
+El usuario interactuará mediante un chatbot conversacional que realizará preguntas, analizará síntomas mediante un árbol de decisión y recomendará playlists terapéuticas.
+
+
+TECNOLOGÍAS
+-----------
+Utilizar obligatoriamente:
+- Python 3.10+
+- Programación Orientada a Objetos
+- CustomTkinter
+- Tkinter
+- ScrolledText
+- Spotipy
+- Spotify OAuth Authorization Code Flow
+- threading o after()
+- webbrowser
+- random
+- os
+- typing
+- dataclasses (si es útil)
+- PyInstaller
+
+No utilizar:
+- Flask
+- Django
+- FastAPI
+- Bases de datos
+- Frameworks web
+
+Todo debe funcionar localmente.
+
+
+ARQUITECTURA
+------------
+Implementar obligatoriamente:
+- Arquitectura Data Driven
+- Máquina de Estados Finitos (FSM)
+- Patrón State
+- Patrón Command
+- Patrón Singleton
+- Clean Architecture
+- SOLID
+- Clean Code
+
+Toda la lógica debe estar desacoplada.
+La Base de Conocimiento nunca debe mezclarse con el motor de inferencia.
+
+
+CLASE PRINCIPAL
+----------------
+Debe existir una única clase principal denominada:
+
+    ChatbotSBCApp
+
+Responsabilidades:
+- Construcción de la GUI
+- Motor de inferencia
+- Gestión del árbol de decisión
+- Gestión de Spotify
+- Gestión del chat
+- Cambio de estados
+- Reinicio del sistema
+- Renderizado dinámico de botones
+
+
+BASE DE CONOCIMIENTO
+---------------------
+Debe existir un único diccionario llamado:
+
+    base_conocimiento
+
+Debe contener exactamente 25 nodos.
+
+Identificadores:
+    N01
+    N02
+    ...
+    N25
+
+Cada nodo debe tener como mínimo:
+
+    {
+        "mensajes": [],
+        "preguntas": [],
+        "opciones": [],
+        "spotify_playlist_id": "",
+        "spotify_playlist_url": "",
+        "playlist_nombre": "",
+        "playlist_descripcion": "",
+        "diagnostico": "",
+        "recomendacion": "",
+        "esHoja": False
+    }
+
+Toda la lógica debe surgir leyendo este diccionario.
+Queda prohibido crear grandes bloques de if/elif/else.
+
+
+MOTOR DE INFERENCIA
+--------------------
+El sistema debe funcionar mediante una Máquina de Estados Finitos.
+
+Debe existir un estado actual.
+
+Ejemplo:
+
+    self.estado_actual = "N01"
+
+Cuando el usuario pulse una opción:
+- leer el nodo
+- cambiar el estado
+- actualizar el chat
+- generar nuevos botones
+- ejecutar Spotify si corresponde
+
+
+PATRONES DE DISEÑO
+--------------------
+
+Singleton
+---------
+La Base de Conocimiento existirá una única vez.
+Será inmutable.
+Solo lectura.
+
+State
+-----
+El comportamiento de la interfaz dependerá únicamente del nodo activo.
+
+Nodo decisión:
+- mostrar opciones
+
+Nodo hoja:
+- ocultar opciones
+- mostrar diagnóstico
+- ejecutar Spotify
+- mostrar Reiniciar Diagnóstico
+
+Command
+-------
+Cada botón generado dinámicamente encapsulará la acción de transición.
+
+Ejemplo conceptual:
+
+    lambda nodo=nodoDestino: self.cambiar_estado(nodo)
+
+
+INTERFAZ
+--------
+CustomTkinter
+
+Ventana:
+- 450 px
+- 650 px
+- No redimensionable.
+
+Paleta:
+- Usuario: #3498DB
+- Bot: #E8F1F5
+
+Botones modernos.
+Esquinas redondeadas.
+Diseño minimalista.
+Aspecto terapéutico.
+
+
+COMPONENTES
+-----------
+Debe existir:
+- Botón superior: "Iniciar sesión con Spotify"
+- Historial de conversación (ScrolledText, solo lectura)
+- Contenedor inferior con botones dinámicos
+
+
+CONVERSACIÓN
+-------------
+El chatbot debe sentirse humano.
+No debe parecer un árbol de decisiones.
+Debe hablar como un profesional del bienestar.
+
+Nunca debe decir:
+- Nodo cargado
+- Estado actualizado
+- Inferencia completada
+- FSM
+- Base de conocimiento
+
+Debe utilizar frases naturales. Ejemplos:
+- "Gracias por responder."
+- "Eso me ayuda bastante."
+- "Vamos avanzando."
+- "Ya tengo una mejor idea de cómo te sientes."
+- "Solo una pregunta más."
+- "Gracias por confiar en este proceso."
+
+
+VARIABILIDAD CONVERSACIONAL
+-----------------------------
+Cada nodo debe contener entre 6 y 10 variantes de:
+- bienvenida
+- introducción
+- confirmación
+- transición
+- pregunta
+- explicación
+
+El sistema elegirá aleatoriamente una.
+No debe repetir frases recientes.
+Debe mantener un historial para evitar repeticiones.
+
+
+MEMORIA DE CONTEXTO
+---------------------
+Durante toda la conversación debe almacenar:
+- síntomas principales
+- rama elegida
+- intensidad
+- intervención elegida
+- playlist seleccionada
+- usuario Spotify
+- hora de inicio
+
+El diagnóstico final deberá construirse utilizando toda esa información.
+
+
+SPOTIFY
+-------
+Variables al inicio:
+
+    SPOTIPY_CLIENT_ID
+    SPOTIPY_CLIENT_SECRET
+    SPOTIPY_REDIRECT_URI
+
+Implementar OAuth Authorization Code Flow mediante Spotipy.
+
+Si el usuario tiene Spotify Premium:
+- detectar dispositivo activo
+- reproducir automáticamente la playlist
+
+Si posee cuenta Free o no inicia sesión:
+- mostrar playlist
+- mostrar canciones
+- mostrar enlace Spotify
+- permitir abrir navegador
+
+
+CHAT
+----
+El historial utilizará ScrolledText.
+Modo: solo lectura.
+
+Los mensajes se insertarán utilizando:
+    after(400)
+o
+    threading
+
+La interfaz nunca debe congelarse.
+
+
+ÁRBOL DE DECISIÓN (ESPECIFICACIÓN COMPLETA DE LOS 25 NODOS)
+==============================================================
+Implementar exactamente el árbol de 25 nodos especificado a continuación.
+No modificar conexiones.
+
+Los nodos finales (hojas) deberán contener:
+- diagnóstico clínico
+- explicación
+- playlist Spotify
+- descripción
+- recomendación personalizada
+
+Estructura general de niveles:
+- Nivel 1: Nodo Raíz (Inicio).
+- Nivel 2: Diagnóstico de Síntomas Principales (Físico, Cognitivo, Emocional).
+- Nivel 3: Clasificación de Intensidad/Tipo de Estrés.
+- Nivel 4: Enfoque de Intervención (Ritmo/Frecuencia).
+- Nivel 5 (Hojas): Nodos de Salida (Prescripción de Playlist/Género).
+
+Mapa completo de conexiones:
+
+[N01: Inicio Diagnóstico]
+ ├── (Síntomas Físicos: Tensión/Insomnio) ──► [N02: Estrés Somático]
+ │    ├── (Agudo/Taquicardia) ──► [N05: Crisis de Ansiedad]
+ │    │    ├── (Bajar pulsaciones) ──► [N11: Enfoque Frecuencias Solfeggio] ──► [N17: 528Hz / Reparación] & [N18: 432Hz / Calma Profunda]
+ │    │    └── (Distracción total)  ──► [N12: Enfoque Sonidos de la Naturaleza] ──► [N19: Lluvia y Truenos] & [N20: Ruido Blanco/Marrón]
+ │    └── (Crónico/Insomnio)   ──► [N06: Fatiga por Estrés]
+ │         ├── (Conciliar sueño)   ──► [N13: Enfoque Ambient Drone] ──► [N21: Dark Ambient] & [N22: Deep Sleep Space Music]
+ │
+ ├── (Síntomas Cognitivos: Bloqueo)   ──► [N03: Estrés Mental/Laboral]
+ │    ├── (Saturación/Bloqueo) ──► [N07: Bloqueo Creativo]
+ │    │    └── (Foco Profundo)     ──► [N14: Enfoque Binaural Beats] ──► [N23: Ondas Alpha (8-12Hz) para Enfoque]
+ │    └── (Hiperactividad Mental)──► [N08: Ansiedad Cognitiva]
+ │         └── (Flujo constante)   ──► [N15: Enfoque Lo-Fi Chillhop] ──► [N24: Lo-Fi Beats sin letra]
+ │
+ └── (Síntomas Emocionales: Irritación)──► [N04: Distimia/Frustración]
+      ├── (Frustración/Enojo)  ──► [N09: Catarsis Emocional]
+      │    └── (Descarga rítmica)  ──► [N16: Enfoque Post-Rock/Ambient Rock] ──► [N25: Post-Rock Instrumental Crescendo]
+      └── (Tristeza/Apatía)     ──► [N10: Melancolía]
+           └── (Validación emocional)──► (Reconecta con N13 o N15 dependiendo del caso)
+
+Tabla de desglose de los 25 nodos:
+
+N01 | Raíz (Inicio)   | Bienvenida al usuario y pregunta gatillo: ¿Cuál es el síntoma predominante hoy?
+N02 | Decisión L2      | Rama de síntomas físicos (Tensión muscular, dolor de cabeza, insomnio).
+N03 | Decisión L2      | Rama de síntomas cognitivos (Falta de concentración, pensamientos acelerados).
+N04 | Decisión L2      | Rama de síntomas emocionales (Irritabilidad, ganas de llorar, apatía).
+N05 | Decisión L3      | Estado detectado: Estrés Agudo Alto (Ataque de pánico inminente o taquicardia).
+N06 | Decisión L3      | Estado detectado: Agotamiento Crónico / Burnout (Cuerpo pesado, sin energía).
+N07 | Decisión L3      | Estado detectado: Bloqueo Mental (Incapacidad de resolver tareas simples).
+N08 | Decisión L3      | Estado detectado: Sobrepensamiento / Overthinking (Mente va a mil por hora).
+N09 | Decisión L3      | Estado detectado: Ira / Frustración Acumulada (Necesidad de soltar tensión).
+N10 | Decisión L3      | Estado detectado: Baja Energía Emocional (Tristeza leve o desgano).
+N11 | Decisión L4      | Filtro terapéutico: Frecuencias de audio específicas (Hertz).
+N12 | Decisión L4      | Filtro ambiental: Sonidos orgánicos/paisajes sonoros.
+N13 | Decisión L4      | Filtro de densidad: Música de texturas densas, lentas y sin ritmo marcado.
+N14 | Decisión L4      | Filtro neuro-acústico: Pulsos auditivos para sincronización de ondas cerebrales.
+N15 | Decisión L4      | Filtro rítmico bajo: Beats lentos pero constantes (BPM entre 60 y 80).
+N16 | Decisión L4      | Filtro dinámico: Música instrumental con evolución y clímax melódicos.
+N17 | Hoja (Salida)    | Playlist Frecuencia 528Hz: Destinada a reducir drásticamente el cortisol.
+N18 | Hoja (Salida)    | Playlist Frecuencia 432Hz: Sintonización armónica para relajación general.
+N19 | Hoja (Salida)    | Ambiente Naturaleza Tormenta: El sonido de la lluvia actúa como escudo acústico.
+N20 | Hoja (Salida)    | Ruido Marrón Profundo: Ideal para apagar el ruido mental inmediato.
+N21 | Hoja (Salida)    | Dark Ambient / Drone Espacial: Para inducir estados de despersonalización del estrés.
+N22 | Hoja (Salida)    | Deep Sleep 0.5 BPM: Música de colchones sintéticos para dormir profundamente.
+N23 | Hoja (Salida)    | Binaural Beats Alpha: Foco de estudio y desbloqueo de tareas complejas.
+N24 | Hoja (Salida)    | Chillhop / Cozy Lo-Fi: Acompañamiento relajante para mentes sobreestimuladas.
+N25 | Hoja (Salida)    | Post-Rock Cinematic: Permite la catarsis y liberación de la frustración por clímax.
+
+
+CALIDAD DEL CÓDIGO
+---------------------
+Todo el código debe incluir:
+- docstrings
+- comentarios profesionales
+- nombres descriptivos
+- funciones pequeñas
+- clases bien definidas
+- separación de responsabilidades
+- tipado cuando sea conveniente
+
+
+ENTREGABLES
+-----------
+El resultado final debe incluir:
+1. Código completo en un único archivo .py.
+2. Base de conocimiento completa con los 25 nodos (según el árbol de decisión especificado arriba).
+3. Integración funcional con Spotify.
+4. Interfaz gráfica completa.
+5. Conversación adaptativa.
+6. Diagnóstico personalizado.
+7. Comandos pip install.
+8. Comando exacto de PyInstaller para generar un .exe monolítico sin consola (--onefile --windowed).
+9. Código listo para producción, sin pseudocódigo ni secciones incompletas.

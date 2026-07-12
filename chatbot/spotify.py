@@ -1,0 +1,207 @@
+import logging
+import time
+from typing import Optional
+
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
+
+from config import SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI, SPOTIFY_MARKET
+
+logger = logging.getLogger(__name__)
+
+_cache_playlists: dict[str, dict] = {}
+
+PLAYLIST_MIN_TRACKS = 10
+SEARCH_LIMIT = 10
+
+
+def crear_oauth() -> SpotifyOAuth:
+    return SpotifyOAuth(
+        client_id=SPOTIPY_CLIENT_ID,
+        client_secret=SPOTIPY_CLIENT_SECRET,
+        redirect_uri=SPOTIPY_REDIRECT_URI,
+        scope="user-read-playback-state user-modify-playback-state",
+        cache_path=None,
+    )
+
+
+def crear_cliente(token: Optional[str] = None) -> spotipy.Spotify:
+    if token:
+        return spotipy.Spotify(auth=token)
+    oauth = crear_oauth()
+    return spotipy.Spotify(auth_manager=oauth)
+
+
+def resolver_playlist(nodo: dict) -> Optional[dict]:
+    query = nodo.get("spotify_query", "").strip()
+    if not query:
+        return None
+
+    if query in _cache_playlists:
+        logger.info(f"Usando caché para query: {query}")
+        resultado = dict(_cache_playlists[query])
+        nodo["spotify_playlist_id"] = resultado["id"]
+        nodo["spotify_playlist_url"] = resultado["url"]
+        nodo["playlist_nombre"] = resultado["nombre"]
+        nodo["playlist_descripcion"] = resultado["descripcion"]
+        return resultado
+
+    market = nodo.get("spotify_market") or SPOTIFY_MARKET
+
+    for intento in range(2):
+        try:
+            sp = crear_cliente()
+            respuesta = sp.search(
+                q=query,
+                type="playlist",
+                limit=SEARCH_LIMIT,
+                market=market,
+            )
+            playlists = respuesta.get("playlists", {}).get("items", [])
+            playlists = [p for p in playlists if p is not None]
+            if not playlists:
+                logger.warning(f"Sin resultados para query: {query}")
+                if intento == 0:
+                    continue
+                return None
+
+            mejor = _seleccionar_mejor_playlist(playlists)
+            if mejor is None:
+                if intento == 0:
+                    continue
+                return None
+
+            resultado = {
+                "id": mejor["id"],
+                "url": mejor.get("external_urls", {}).get("spotify", ""),
+                "nombre": mejor.get("name", ""),
+                "descripcion": mejor.get("description", "") or "",
+            }
+
+            _cache_playlists[query] = resultado
+
+            nodo["spotify_playlist_id"] = resultado["id"]
+            nodo["spotify_playlist_url"] = resultado["url"]
+            nodo["playlist_nombre"] = resultado["nombre"]
+            nodo["playlist_descripcion"] = resultado["descripcion"]
+
+            return resultado
+
+        except spotipy.SpotifyException as e:
+            logger.error(f"Error Spotify (intento {intento + 1}): {e}")
+            if intento == 0:
+                time.sleep(0.5)
+                continue
+            return None
+        except Exception as e:
+            logger.error(f"Error inesperado (intento {intento + 1}): {e}")
+            if intento == 0:
+                time.sleep(0.5)
+                continue
+            return None
+
+    return None
+
+
+def _seleccionar_mejor_playlist(playlists: list[dict]) -> Optional[dict]:
+    if not playlists:
+        return None
+
+    for pl in playlists:
+        try:
+            nombre = (pl.get("name") or "").strip()
+            desc = (pl.get("description") or "").strip()
+            tracks = pl.get("tracks", {})
+            total_tracks = tracks.get("total", 0) if isinstance(tracks, dict) else 0
+            if nombre and total_tracks >= PLAYLIST_MIN_TRACKS:
+                return pl
+        except (KeyError, TypeError, AttributeError):
+            continue
+
+    for pl in playlists:
+        try:
+            tracks = pl.get("tracks", {})
+            total_tracks = tracks.get("total", 0) if isinstance(tracks, dict) else 0
+            if total_tracks >= 1:
+                return pl
+        except (KeyError, TypeError, AttributeError):
+            continue
+
+    return playlists[0] if playlists else None
+
+
+def limpiar_cache() -> None:
+    _cache_playlists.clear()
+
+
+def obtener_dispositivo_activo(sp: spotipy.Spotify) -> Optional[dict]:
+    try:
+        dispositivos = sp.devices()
+        devices = dispositivos.get("devices", [])
+        for d in devices:
+            if d.get("is_active"):
+                return d
+        for d in devices:
+            if d.get("type") in ("computer", "speaker", "phone"):
+                return d
+        return None
+    except Exception as e:
+        logger.error(f"Error al obtener dispositivos: {e}")
+        return None
+
+
+def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> str:
+    resultado = ""
+    try:
+        sp.start_playback(context_uri=playlist_uri)
+        return "ok"
+    except spotipy.SpotifyException as e:
+        if "NO_ACTIVE_DEVICE" in str(e) or e.http_status == 404:
+            resultado = "no_device"
+        elif e.http_status == 403:
+            resultado = "free_account"
+        else:
+            logger.error(f"Error al reproducir: {e}")
+            resultado = "error"
+    except Exception as e:
+        logger.error(f"Error inesperado: {e}")
+        resultado = "error"
+
+    if resultado != "ok":
+        try:
+            dispositivo = obtener_dispositivo_activo(sp)
+            if dispositivo:
+                sp.start_playback(device_id=dispositivo["id"], context_uri=playlist_uri)
+                return "ok"
+        except spotipy.SpotifyException as e:
+            if e.http_status == 403:
+                resultado = "free_account"
+            elif not dispositivo:
+                resultado = "no_device"
+            else:
+                resultado = "error"
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            resultado = "error"
+
+    return resultado
+
+
+def obtener_canciones_playlist(sp: spotipy.Spotify, playlist_id: str, limit: int = 10) -> list[dict]:
+    try:
+        resultados = sp.playlist_tracks(playlist_id, limit=limit)
+        canciones = []
+        for item in resultados.get("items", []):
+            track = item.get("track")
+            if track is None:
+                continue
+            nombre = track.get("name", "Sin nombre")
+            artista = ", ".join(
+                a.get("name", "") for a in track.get("artists", []) if a
+            )
+            url = track.get("external_urls", {}).get("spotify", "")
+            canciones.append({"nombre": nombre, "artista": artista, "url": url})
+        return canciones
+    except Exception as e:
+        logger.error(f"Error al obtener canciones: {e}")
+        return []

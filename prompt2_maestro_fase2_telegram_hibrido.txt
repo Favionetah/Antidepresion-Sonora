@@ -1,0 +1,302 @@
+PROMPT MAESTRO – FASE 2
+INTEGRACIÓN HÍBRIDA: DESKTOP + TELEGRAM SOBRE EL MISMO SBC
+==============================================================
+
+ROL
+---
+Actúa como un Arquitecto de Software Senior, Especialista en Sistemas Basados en Conocimiento (SBC), Ingeniero de Software, Especialista en Clean Architecture, Desarrollador Senior en Python, Especialista en Telegram Bot API, Especialista en Spotify OAuth multiusuario y Experto en integración de APIs.
+
+No desarrolles un bot aislado.
+
+Debes EXTENDER el proyecto de Fase 1 (aplicación de escritorio con CustomTkinter) para que el mismo Sistema Basado en Conocimiento pueda usarse también desde Telegram, sin duplicar lógica y sin romper la aplicación de escritorio existente.
+
+Todo el código debe ser de producción.
+No escribas pseudocódigo.
+No omitas funciones.
+No utilices ejemplos simplificados ni comentarios tipo TODO.
+
+
+OBJETIVO
+--------
+Integrar el chatbot del SBC desarrollado para escritorio con Telegram, reutilizando exactamente el mismo motor de inferencia, la misma Base de Conocimiento y la misma lógica de Spotify.
+
+La aplicación final tendrá DOS interfaces independientes que comparten un mismo núcleo:
+
+1. Aplicación de escritorio (CustomTkinter) — un solo usuario, ejecutable .exe.
+2. Bot de Telegram — múltiples usuarios concurrentes, proceso de servidor de larga duración.
+
+Ambas comparten el mismo motor de inferencia, la misma base_conocimiento y la misma lógica de Spotify. Ninguna reimplementa nada del núcleo.
+
+
+MIGRACIÓN OBLIGATORIA DESDE LA FASE 1 (ARCHIVO ÚNICO → PAQUETE COMPARTIDO)
+----------------------------------------------------------------------------
+La Fase 1 exigía un único archivo .py. Esa restricción queda ANULADA en esta fase porque impide la reutilización de código entre interfaces.
+
+Debes refactorizar el código monolítico de la Fase 1 extrayendo TODO lo que no sea GUI de escritorio hacia un paquete compartido `chatbot/`. Nada de lógica de negocio puede quedar dentro del archivo de la GUI de escritorio ni del archivo del bot.
+
+Reglas de la migración:
+- La clase ChatbotSBCApp de la Fase 1 debe dividirse: la parte de construcción de ventana/widgets de CustomTkinter permanece en `desktop_gui.py`; el resto (estado, transiciones, lectura de nodos, decisiones) pasa al motor compartido.
+- El diccionario `base_conocimiento` se mueve tal cual, sin alterar los 25 nodos ni sus conexiones, a `chatbot/base_conocimiento.py`. Sigue siendo Singleton, inmutable, de solo lectura.
+- El motor de inferencia (FSM) deja de asumir que existe una sola instancia global (`self.estado_actual` como atributo único de una app de escritorio). Debe convertirse en una clase instanciable (por ejemplo `MotorFSM` o `SesionSBC`) de la que se pueda crear una instancia por usuario. La app de escritorio simplemente instancia una y la usa; Telegram instancia una por cada chat_id.
+- Toda la lógica de Spotify (excepto la parte de UI) se mueve a `chatbot/spotify.py`.
+- El contexto de conversación (síntomas, rama elegida, intensidad, playlist, usuario Spotify, hora de inicio, historial de frases usadas) se mueve a `chatbot/contexto.py` como una clase de datos por sesión, no como atributos sueltos.
+
+Al terminar la migración, la app de escritorio debe seguir funcionando exactamente igual que en la Fase 1, pero ahora consumiendo el paquete `chatbot/` en lugar de tener la lógica embebida.
+
+
+ARQUITECTURA
+------------
+
+                +----------------------------+
+                | Base de Conocimiento (SBC) |
+                |   chatbot/base_conocimiento.py (Singleton, inmutable)
+                +-------------+--------------+
+                              |
+                     Motor de Inferencia (FSM)
+                     chatbot/motor_fsm.py
+                     (instanciable, una sesión por usuario)
+                              |
+          +-------------------+-------------------+
+          |                                       |
+   desktop_gui.py                          telegram_bot.py
+   (Aplicación Desktop,                    (Bot de Telegram,
+    una sola sesión,                        una sesión por chat_id,
+    proceso .exe)                           proceso servidor asyncio)
+
+Reglas estrictas:
+- telegram_bot.py NUNCA contiene lógica de negocio, diagnóstico, ni decisiones sobre el árbol. Solo traduce updates de Telegram a llamadas al motor, y respuestas del motor a mensajes/botones de Telegram.
+- desktop_gui.py NUNCA contiene lógica de negocio propia distinta a la de Telegram. Ambas interfaces deben producir el mismo diagnóstico ante las mismas respuestas del usuario.
+- Prohibido duplicar: árbol de decisión, base de conocimiento, diagnósticos, lógica de Spotify, lógica FSM, recomendaciones, frases variables. Todo vive una sola vez en `chatbot/`.
+
+
+MODELO DE EJECUCIÓN (DOS PROCESOS INDEPENDIENTES)
+-----------------------------------------------------
+La app de escritorio y el bot de Telegram NO se ejecutan como el mismo proceso ni se empaquetan juntos.
+
+- `desktop_main.py` es el entry point de la app de escritorio. Se empaqueta con PyInstaller (`--onefile --windowed`) exactamente igual que en la Fase 1, y corre en la máquina del usuario final bajo demanda.
+- `telegram_main.py` es el entry point del bot. Es un proceso de larga duración (servidor), pensado para ejecutarse continuamente (por ejemplo con `python telegram_main.py` en un VPS, contenedor o servicio en segundo plano). No se empaqueta como .exe de escritorio.
+- Ambos entry points importan el mismo paquete `chatbot/`, pero jamás se ejecutan dentro del mismo proceso ni comparten el mismo event loop. La app de escritorio puede usar `threading`/`after()` como en la Fase 1; el bot de Telegram corre íntegramente sobre `asyncio` a través de `python-telegram-bot`. No mezclar ambos loops.
+
+
+REUTILIZACIÓN DEL CÓDIGO
+--------------------------
+Está estrictamente prohibido duplicar:
+- árbol de decisión
+- base de conocimiento
+- diagnósticos
+- lógica de Spotify
+- lógica FSM
+- recomendaciones
+
+Toda la lógica debe reutilizarse desde `chatbot/`. Telegram es únicamente otra interfaz.
+
+
+LIBRERÍAS
+---------
+Utilizar:
+- python-telegram-bot (versión estable, API asíncrona v20+)
+- asyncio
+- Python 3.10+
+- Flask o un micro-servidor HTTP mínimo (solo para el callback de OAuth de Spotify, ver sección siguiente — es la única excepción admitida a la prohibición de frameworks web de la Fase 1, y solo se usa para este propósito puntual)
+
+No utilizar librerías obsoletas (ej. versiones de python-telegram-bot anteriores a la v20, que usan API síncrona).
+
+
+ESTRUCTURA RECOMENDADA
+-------------------------
+proyecto/
+├── chatbot/
+│   ├── __init__.py
+│   ├── base_conocimiento.py
+│   ├── motor_fsm.py
+│   ├── spotify.py
+│   ├── contexto.py
+│   └── frases.py
+├── desktop_gui.py
+├── desktop_main.py
+├── telegram_bot.py
+├── telegram_main.py
+├── oauth_callback_server.py
+├── config.py
+├── requirements.txt
+└── README.md
+
+
+SESIONES Y ESTADO POR USUARIO EN TELEGRAM
+---------------------------------------------
+Cada usuario de Telegram debe tener su propia instancia del motor FSM y su propio contexto. Nunca compartir estado entre usuarios.
+
+Ejemplo conceptual:
+
+    sesiones: dict[int, SesionSBC] = {
+        123456789: SesionSBC(),
+        987654321: SesionSBC(),
+    }
+
+Al recibir cualquier update, el bot busca (o crea, si no existe) la sesión correspondiente al `chat_id` del usuario antes de invocar al motor.
+
+Persistencia en memoria por sesión:
+- nodo actual
+- historial de nodos visitados
+- síntomas detectados
+- playlist recomendada
+- hora de inicio
+- token de Spotify del usuario (si autenticó), ver sección OAuth
+- historial de frases recientes (para evitar repetición)
+
+Si el usuario envía /start, toda su sesión se reinicia por completo (se descarta la instancia anterior y se crea una nueva).
+
+Un usuario nunca debe poder leer ni modificar el estado de otro. No usar variables globales mutables compartidas entre chat_ids salvo el propio diccionario de sesiones, que se indexa siempre por chat_id.
+
+
+FUNCIONAMIENTO
+---------------
+Cuando un usuario escriba /start, el bot deberá:
+1. Crear (o reiniciar) su sesión.
+2. Inicializar la FSM en N01.
+3. Enviar el mensaje inicial usando el mismo motor de frases variables que la Fase 1.
+4. Mostrar los botones dinámicos correspondientes al nodo N01.
+
+
+BOTONES
+-------
+Utilizar obligatoriamente InlineKeyboardMarkup e InlineKeyboardButton.
+
+Nunca pedir al usuario escribir manualmente las respuestas cuando existan opciones definidas en el nodo.
+
+Cada botón debe llevar en su `callback_data` el identificador del nodo destino (por ejemplo `"goto:N02"`), y el handler de callbacks debe invocar exactamente la misma función `cambiar_estado(nodo_destino)` del motor compartido que usa la app de escritorio — no una reimplementación paralela.
+
+Ejemplo:
+
+    ¿Cómo te sientes hoy?
+    🟦 Síntomas físicos
+    🟦 Síntomas mentales
+    🟦 Síntomas emocionales
+
+
+CONVERSACIÓN Y VARIABILIDAD
+------------------------------
+Mantener exactamente el mismo estilo conversacional que la aplicación de escritorio: el chatbot debe sentirse humano, no un menú automático.
+
+Reutilizar el mismo banco de frases variables (`chatbot/frases.py`) que ya usa la Fase 1 para bienvenida, introducción, confirmación, transición, pregunta y explicación. No crear un segundo banco de frases para Telegram.
+
+El motor elige una frase al azar por cada evento, evitando repetir las últimas usadas en esa sesión (el historial de frases recientes vive en el contexto de cada sesión, no es global).
+
+
+OBTENCIÓN DE LAS PLAYLISTS: BÚSQUEDA DINÁMICA VÍA SPOTIFY SEARCH API
+--------------------------------------------------------------------
+Las playlists NO deben quedar fijadas a mano (nada de IDs hardcodeados en la base de conocimiento). Cada nodo hoja debe resolver su playlist en tiempo real consultando la API de búsqueda de Spotify a través de Spotipy.
+
+Campos nuevos por nodo hoja en `base_conocimiento`:
+- "spotify_query": string con la consulta de búsqueda temática del nodo (por ejemplo, para N17: "528hz solfeggio healing frequency"; para N25: "post rock instrumental cinematic crescendo").
+- "spotify_market": código de mercado opcional (ej. "US") a pasar a la búsqueda, para evitar resultados no disponibles en la región del usuario.
+
+Los campos "spotify_playlist_id", "spotify_playlist_url", "playlist_nombre" y "playlist_descripcion" del nodo dejan de ser valores fijos: pasan a completarse dinámicamente en tiempo de ejecución con el resultado de la búsqueda, y nunca se escriben a mano en el diccionario.
+
+Función de resolución (en `chatbot/spotify.py`):
+- Implementar una función, por ejemplo `resolver_playlist(nodo: dict) -> PlaylistResultado`, que:
+  1. Tome el "spotify_query" del nodo.
+  2. Llame a `sp.search(q=spotify_query, type="playlist", limit=10, market=spotify_market)`.
+  3. Filtre resultados nulos o playlists vacías/sin tracks (la Search API puede devolver entradas `None` o playlists borradas; deben descartarse).
+  4. Elija la playlist resultante aplicando un criterio de calidad simple y determinista, no al azar: por ejemplo, la primera playlist con más de un número mínimo de tracks (configurable, ej. >= 10) y con nombre/descripción no vacíos. Si ninguna cumple el mínimo, usar la primera con al menos 1 track.
+  5. Devuelva un objeto/diccionario con playlist_id, playlist_url, nombre y descripción reales obtenidos de la API (no inventados).
+
+Caché en memoria por sesión de ejecución:
+- Como el resultado de una misma query puede variar levemente entre llamadas y la búsqueda consume una petición HTTP, se debe cachear el resultado de `resolver_playlist` en memoria (por ejemplo `dict[str, PlaylistResultado]` indexado por "spotify_query") durante la vida del proceso, tanto en la app de escritorio como en el bot de Telegram. Así, dos usuarios que lleguen al mismo nodo hoja no disparan dos búsquedas idénticas innecesarias.
+- Esta caché es solo de rendimiento; no reemplaza la búsqueda en sí, que sigue siendo dinámica.
+
+Manejo de fallos:
+- Si la búsqueda falla (sin conexión, error de la API, token expirado) o no devuelve ningún resultado utilizable, el sistema NUNCA debe romperse ni mostrar un error técnico al usuario. Debe:
+  1. Reintentar una vez la búsqueda.
+  2. Si vuelve a fallar, mostrar el diagnóstico y la recomendación textual del nodo igualmente, indicando de forma conversacional y natural que no fue posible obtener la playlist en este momento, e invitar a intentarlo de nuevo más tarde o mediante el comando /spotify (en Telegram) o el botón correspondiente (en escritorio).
+  3. Registrar el fallo en el log (ver sección de Registro).
+
+Consistencia entre interfaces:
+- Tanto desktop_gui.py como telegram_bot.py deben invocar exactamente la misma función `resolver_playlist` del paquete `chatbot/spotify.py`. Ninguna interfaz debe implementar su propia lógica de búsqueda o su propio criterio de selección de playlist.
+
+
+SPOTIFY: AUTENTICACIÓN OAUTH MULTIUSUARIO
+----------------------------------------------
+Este es el punto más delicado de la Fase 2 y debe resolverse explícitamente así:
+
+Problema: en la Fase 1, el OAuth Authorization Code Flow asumía un único usuario local con `redirect_uri` apuntando a `http://localhost:PUERTO/callback`. En Telegram hay múltiples usuarios concurrentes, y el callback HTTP de Spotify no sabe por sí mismo a qué chat_id de Telegram pertenece cada autorización.
+
+Solución obligatoria — uso del parámetro `state`:
+1. Cuando un usuario de Telegram pide autenticarse con Spotify (comando /spotify o al llegar a un nodo hoja sin tener token), el bot genera una URL de autorización de Spotify e incluye el `chat_id` del usuario (idealmente firmado o combinado con un token aleatorio para evitar manipulación) dentro del parámetro `state` de la URL de OAuth.
+2. El bot envía esa URL al usuario como un botón/enlace clicable ("Conectar mi cuenta de Spotify").
+3. Debe levantarse un pequeño servidor HTTP local (`oauth_callback_server.py`), corriendo en el mismo proceso del bot mediante un hilo o tarea asíncrona, que escuche en el `redirect_uri` configurado en el Spotify Developer Dashboard.
+4. Cuando Spotify redirige al usuario tras autorizar, ese servidor recibe el `code` y el `state`. Extrae el `chat_id` original del `state`, intercambia el `code` por un access/refresh token usando Spotipy, y guarda ese token asociado a la sesión de ese `chat_id` en el diccionario de sesiones.
+5. El servidor responde con una página HTML simple de confirmación ("Ya puedes volver a Telegram") y, si es posible, el bot envía un mensaje de confirmación al chat correspondiente.
+6. A partir de ese momento, esa sesión de Telegram tiene su propio token de Spotify, independiente del de cualquier otro usuario y del de la app de escritorio.
+
+Reproducción:
+- Si el usuario de Telegram autenticado tiene Spotify Premium y dispositivo activo detectado vía Spotipy, el bot puede intentar iniciar la reproducción remota (`start_playback`) igual que la app de escritorio.
+- Si no tiene Premium, no ha autenticado, o no hay dispositivo activo, el bot debe enviar en su lugar: nombre de la playlist, descripción, canciones principales y enlace directo de Spotify.
+
+No usar la misma sesión/token que la aplicación de escritorio para los usuarios de Telegram; cada `chat_id` tiene su propio token, obtenido mediante el flujo de `state` descrito arriba.
+
+
+ENLACES
+-------
+Telegram debe enviar siempre enlaces clicables (Markdown o HTML de Telegram), por ejemplo:
+
+    🎵 Playlist recomendada
+    Deep Sleep Space Music
+    https://open.spotify.com/playlist/...
+
+
+COMANDOS
+--------
+Implementar:
+- /start — crea o reinicia la sesión del usuario y comienza el diagnóstico en N01.
+- /help — explica cómo funciona el chatbot.
+- /about — explica propósito, autor y versión del proyecto.
+- /reset — reinicia completamente la FSM y el contexto de esa sesión.
+- /spotify — reenvía la playlist recomendada actual, o inicia el flujo de autenticación si aún no se ha conectado.
+- /diagnostico — resume el diagnóstico realizado hasta el momento en esa sesión, usando el contexto acumulado.
+
+
+MANEJO DE ERRORES
+--------------------
+Si un botón deja de ser válido (por ejemplo, la sesión expiró o fue reiniciada), mostrar un mensaje amigable invitando a usar /start, nunca lanzar una excepción visible ni un stack trace al usuario. Todo error debe capturarse y registrarse en el log, respondiendo siempre con un mensaje conversacional.
+
+
+REGISTRO (LOGGING)
+---------------------
+Registrar, por sesión:
+- inicio de conversación (chat_id, hora)
+- fin de conversación o reinicio
+- cada nodo visitado
+- playlist recomendada
+- errores capturados
+
+Guardar en un archivo de log rotativo simple (por ejemplo con el módulo `logging` estándar de Python), sin necesidad de base de datos.
+
+
+CALIDAD
+-------
+Aplicar en todo el código nuevo y en el migrado:
+- SOLID
+- Clean Code
+- Programación Orientada a Objetos
+- Tipado (type hints)
+- Docstrings
+- Nombres descriptivos
+- Separación estricta de responsabilidades entre `chatbot/`, `desktop_gui.py` y `telegram_bot.py`
+
+
+ENTREGABLES
+-----------
+El resultado final debe incluir:
+1. Refactor completo de la Fase 1 hacia el paquete compartido `chatbot/`, manteniendo la app de escritorio 100% funcional.
+2. Código completo del bot de Telegram (`telegram_bot.py`, `telegram_main.py`).
+3. Servidor de callback OAuth multiusuario (`oauth_callback_server.py`) con el mecanismo de `state` descrito.
+4. Manejo de sesiones independientes por chat_id.
+5. Botones dinámicos (InlineKeyboardMarkup) conectados al mismo motor FSM que usa el escritorio.
+6. Conversación adaptativa reutilizando el mismo banco de frases variables.
+7. Integración con Spotify multiusuario (token por sesión de Telegram) y resolución dinámica de playlists vía Spotify Search API (función `resolver_playlist`, caché en memoria y manejo de fallos según lo especificado).
+8. Archivo requirements.txt actualizado con todas las dependencias nuevas.
+9. Instrucciones paso a paso para crear el bot con BotFather.
+10. Explicación de cómo configurar BOT_TOKEN, SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET y el redirect_uri de Spotify para que apunte al servidor de callback.
+11. Pasos para ejecutar ambos entry points localmente (`desktop_main.py` y `telegram_main.py`) de forma independiente.
+12. Código listo para producción, sin pseudocódigo ni secciones incompletas.

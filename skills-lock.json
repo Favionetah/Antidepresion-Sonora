@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "python-appservice-deploy": {
+      "source": "microsoft/azure-skills",
+      "sourceType": "github",
+      "skillPath": "skills/python-appservice-deploy/SKILL.md",
+      "computedHash": "06b83ec859a9ee1cd775b813787b20ac90480751b7e76e6db2a9b47f181f3fc4"
+    }
+  }
+}
