@@ -661,7 +661,7 @@ class ChatbotSBCApp:
             height=40,
         )
         btn.pack(fill="x", padx=5, pady=3)
-        self._botones_dinamicos.append(btn)
+        self._botones_opciones_actuales.append(btn)
 
     def _iniciar_sesion_spotify(self) -> None:
         global _callback_code, _callback_event
