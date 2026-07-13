@@ -119,7 +119,7 @@ class MotorFSM:
     def _evaluar_redireccion_emocional(self, resultado_emocion: dict) -> Optional[dict]:
         emotion = resultado_emocion["principal"]
         intensidad = resultado_emocion["intensidad"]
-        if emotion == "neutral" or intensidad != "alta":
+        if emotion == "neutral":
             return None
 
         nodo_id = self.estado_actual

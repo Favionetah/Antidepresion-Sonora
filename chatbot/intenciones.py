@@ -67,6 +67,20 @@ STEMMAP: dict[str, str] = {
     "energia": "cansancio",
     "fuerza": "cansancio",
     "vitalidad": "cansancio",
+    "irritabilidad": "irritabilidad",
+    "palpitaciones": "palpitacion",
+    "cognitivo": "mental",
+    "pensamientos": "pensamiento",
+    "concentracion": "concentracion",
+    "desesperacion": "angustia",
+    "nerviosismo": "ansiedad",
+    "frustracion": "frustracion",
+    "insatisfecho": "frustracion",
+    "decepcion": "tristeza",
+    "incapaz": "bloqueo",
+    "desgaste": "cansancio",
+    "preocupado": "ansiedad",
+    "intranquilo": "ansiedad",
 }
 
 STOPWORDS = {
@@ -190,13 +204,14 @@ def _expandir_con_sinonimos(tokens: list[str]) -> set[str]:
         raiz_stem = _stem([raiz])[0]
         if raiz_stem != raiz:
             resultado.add(raiz_stem)
-        sinonimos = SINONIMOS.get(raiz, [])
-        for s in sinonimos:
-            s_norm = _normalizar(s)
-            resultado.add(s_norm)
-            s_stem = _stem([s_norm])[0]
-            if s_stem != s_norm:
-                resultado.add(s_stem)
+        for clave in [raiz, raiz_stem]:
+            sinonimos = SINONIMOS.get(clave, [])
+            for s in sinonimos:
+                s_norm = _normalizar(s)
+                resultado.add(s_norm)
+                s_stem = _stem([s_norm])[0]
+                if s_stem != s_norm:
+                    resultado.add(s_stem)
     return resultado
 
 
