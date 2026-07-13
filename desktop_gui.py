@@ -5,6 +5,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
 
+import spotipy
 import customtkinter as ctk
 from spotipy.oauth2 import SpotifyOAuth
 
@@ -669,6 +670,30 @@ class ChatbotSBCApp:
         btn.pack(fill="x", padx=5, pady=3)
         self._botones_opciones_actuales.append(btn)
 
+    def _actualizar_btn_conectado(self, nombre: str) -> None:
+        self._btn_spotify.configure(
+            text=f"{nombre} ✅",
+            command=self._desvincular_spotify,
+            fg_color="#1E6B38",
+            hover_color="#C0392B",
+        )
+        self._agregar_mensaje(f"Conectado como {nombre}.")
+
+    def _desvincular_spotify(self) -> None:
+        self.token_spotify = None
+        self._btn_spotify.configure(
+            text="Conectar Spotify",
+            command=self._iniciar_sesion_spotify,
+            fg_color=SKGREEN,
+            hover_color=SKGREEN_HOVER,
+        )
+        import os as _os
+        for f in [".cache", ".spotify_cache.json"]:
+            p = _os.path.join(_os.path.dirname(__file__), f)
+            if _os.path.exists(p):
+                _os.remove(p)
+        self._agregar_mensaje("Spotify desconectado. Puedes conectar otra cuenta.")
+
     def _iniciar_sesion_spotify(self) -> None:
         global _callback_code, _callback_event
         _callback_code = None
@@ -712,9 +737,14 @@ class ChatbotSBCApp:
                     self.token_spotify = resultado["access_token"]
                 else:
                     self.token_spotify = resultado
-                self.ventana.after(0, lambda: self._agregar_mensaje(
-                    "Conexión con Spotify exitosa."
-                ))
+                nombre = "Spotify"
+                try:
+                    sp_temp = spotipy.Spotify(auth=self.token_spotify)
+                    perfil = sp_temp.me()
+                    nombre = perfil.get("display_name", "Spotify")
+                except Exception:
+                    pass
+                self.ventana.after(0, lambda n=nombre: self._actualizar_btn_conectado(n))
             except Exception as e:
                 logger.error(f"Error al obtener token: {e}")
                 self.ventana.after(0, lambda: self._agregar_mensaje(
