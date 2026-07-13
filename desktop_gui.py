@@ -752,9 +752,44 @@ class ChatbotSBCApp:
             return
         self._entry.delete(0, "end")
         self._agregar_mensaje(texto, es_usuario=True)
-        self._agregar_mensaje_con_efecto(
-            "No entendí del todo. Por favor, selecciona una opción de los botones."
-        )
+        self._procesando = True
+        threading.Thread(target=self._procesar_texto_usuario, args=(texto,), daemon=True).start()
+
+    def _procesar_texto_usuario(self, texto: str):
+        resultado = self.motor.procesar_texto(texto)
+        if resultado["tipo"] == "opcion":
+            indice = resultado["indice"]
+            opcion = self.motor.obtener_info_opcion(indice)
+            if opcion:
+                destino = self.motor.transicionar(indice)
+                if not destino:
+                    self._procesando = False
+                    return
+                if hasattr(self, '_nodo_anterior') and self._nodo_anterior is not None:
+                    confirmacion = construir_mensaje_confirmacion(
+                        self._nodo_anterior, self.sesion, opcion["texto"]
+                    )
+                    self._agregar_mensaje_con_efecto(confirmacion)
+                self._nodo_anterior = self.motor.obtener_nodo_actual()
+                if self.motor.es_nodo_hoja():
+                    self._procesar_nodo_hoja()
+                else:
+                    self._procesar_nodo_decision()
+                self._procesando = False
+        elif resultado["tipo"] == "redireccion":
+            sugerencia = resultado["sugerencia"]
+            msg = sugerencia.get("mensaje", "Parece que tu estado emocional ha cambiado.")
+            self._agregar_mensaje_con_efecto(msg)
+            self._procesando = False
+        else:
+            msg = self.motor.obtener_mensaje_empatico()
+            if msg:
+                self._agregar_mensaje_con_efecto(msg)
+            else:
+                self._agregar_mensaje_con_efecto(
+                    "No entendí del todo. Por favor, selecciona una opción de los botones."
+                )
+            self._procesando = False
 
     def _reiniciar_diagnostico(self):
         self.motor.reiniciar()
