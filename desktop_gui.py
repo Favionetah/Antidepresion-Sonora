@@ -22,47 +22,47 @@ from chatbot.frases import (
 logger = logging.getLogger(__name__)
 
 LIGHT = {
-    "bg": "#F5F0FF",
+    "bg": "#F0F4FF",
     "card": "#FFFFFF",
-    "primary": "#8B5CF6",
-    "primary_hover": "#7C3AED",
-    "accent": "#059669",
-    "accent_hover": "#047857",
-    "text": "#1F1235",
+    "primary": "#223CCC",
+    "primary_hover": "#161B8E",
+    "accent": "#8D39D0",
+    "accent_hover": "#7A2FB8",
+    "text": "#1A1A2E",
     "text_sec": "#6B7280",
-    "border": "#E9E0F5",
-    "red": "#DC2626",
-    "red_hover": "#B91C1C",
-    "chat": "#FDFBFF",
-    "bubble_bot": "#EDE9FE",
-    "bubble_user": "#8B5CF6",
+    "border": "#E2E8F0",
+    "red": "#ED4563",
+    "red_hover": "#D63551",
+    "chat": "#F8FAFF",
+    "bubble_bot": "#E8EDFF",
+    "bubble_user": "#223CCC",
     "bubble_user_text": "#FFFFFF",
-    "bubble_bot_text": "#1F1235",
+    "bubble_bot_text": "#1A1A2E",
     "input_bg": "#FFFFFF",
-    "input_border": "#D1D5DB",
+    "input_border": "#CBD5E1",
     "green": "#1DB954",
     "amber": "#D4933A",
 }
 
 DARK = {
-    "bg": "#0F0A1A",
-    "card": "#1A1230",
-    "primary": "#A78BFA",
-    "primary_hover": "#8B5CF6",
-    "accent": "#34D399",
-    "accent_hover": "#10B981",
-    "text": "#F3F0FF",
-    "text_sec": "#9CA3AF",
-    "border": "#2D2045",
-    "red": "#EF4444",
-    "red_hover": "#DC2626",
-    "chat": "#150D26",
-    "bubble_bot": "#2D2045",
-    "bubble_user": "#7C3AED",
+    "bg": "#0A0F1E",
+    "card": "#131A30",
+    "primary": "#3B5FE0",
+    "primary_hover": "#223CCC",
+    "accent": "#A855F7",
+    "accent_hover": "#8D39D0",
+    "text": "#E8EDFF",
+    "text_sec": "#94A3B8",
+    "border": "#1E293B",
+    "red": "#F87171",
+    "red_hover": "#ED4563",
+    "chat": "#0D1326",
+    "bubble_bot": "#1E293B",
+    "bubble_user": "#223CCC",
     "bubble_user_text": "#FFFFFF",
-    "bubble_bot_text": "#E9E0F5",
-    "input_bg": "#1A1230",
-    "input_border": "#3D3055",
+    "bubble_bot_text": "#E8EDFF",
+    "input_bg": "#131A30",
+    "input_border": "#334155",
     "green": "#1DB954",
     "amber": "#D4933A",
 }
@@ -312,7 +312,6 @@ class ChatbotSBCApp:
 
         self._btn_spotify = ctk.CTkButton(
             marco, text="Spotify", width=80, height=36,
-            image=self._iconos.get("spotify"),
             command=self._iniciar_sesion_spotify,
             fg_color=self._t["green"], hover_color=self._t["accent_hover"],
             text_color="white", corner_radius=22, font=("Segoe UI", 11, "bold"),
@@ -321,8 +320,7 @@ class ChatbotSBCApp:
         self._btn_spotify.pack(side="right", padx=(4, 0))
 
         self._btn_reiniciar = ctk.CTkButton(
-            marco, text="", width=36, height=36,
-            image=self._iconos.get("new"),
+            marco, text="Nuevo", width=80, height=36,
             command=self._reiniciar_diagnostico,
             fg_color=self._t["red"], hover_color=self._t["red_hover"],
             corner_radius=18,
@@ -668,8 +666,7 @@ class ChatbotSBCApp:
         marco = ctk.CTkFrame(self._chat_frame, fg_color="transparent")
         marco.pack(fill="x", padx=10, pady=(2, 4))
         btn = ctk.CTkButton(
-            marco, text="Reintentar reproducción",
-            image=self._iconos.get("retry"),
+            marco, text="Reintentar",
             command=reintentar,
             fg_color=self._t["primary"], hover_color=self._t["primary_hover"],
             text_color="white", corner_radius=20, height=38,
@@ -680,7 +677,7 @@ class ChatbotSBCApp:
 
     def _actualizar_btn_conectado(self, nombre: str):
         self._btn_spotify.configure(
-            text=f"{nombre}", image=self._iconos.get("spotify"),
+            text=nombre,
             command=self._desvincular_spotify,
             fg_color="#1E6B38", hover_color=self._t["red"],
         )
@@ -688,7 +685,7 @@ class ChatbotSBCApp:
     def _desvincular_spotify(self):
         self.token_spotify = None
         self._btn_spotify.configure(
-            text="Spotify", image=self._iconos.get("spotify"),
+            text="Spotify",
             command=self._iniciar_sesion_spotify,
             fg_color=self._t["green"], hover_color=self._t["accent_hover"],
             text_color="white",
