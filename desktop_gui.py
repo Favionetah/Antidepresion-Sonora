@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import threading
 import time
 import webbrowser
@@ -72,7 +73,10 @@ ALTO = 720
 DELAY_MS = 300
 OAUTH_HOST = "127.0.0.1"
 OAUTH_PORT = 8888
-RUTA_ICONOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+if getattr(sys, 'frozen', False):
+    RUTA_ICONOS = os.path.join(sys._MEIPASS, "assets")
+else:
+    RUTA_ICONOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 _callback_code: Optional[str] = None
 _callback_event = threading.Event()
@@ -691,7 +695,7 @@ class ChatbotSBCApp:
             text_color="white",
         )
         for f in [".cache", ".spotify_cache.json"]:
-            p = os.path.join(os.path.dirname(__file__), f)
+            p = os.path.join(os.getcwd(), f)
             if os.path.exists(p):
                 os.remove(p)
         self._agregar_mensaje("Spotify desconectado.")
