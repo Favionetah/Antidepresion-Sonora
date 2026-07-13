@@ -756,39 +756,43 @@ class ChatbotSBCApp:
         threading.Thread(target=self._procesar_texto_usuario, args=(texto,), daemon=True).start()
 
     def _procesar_texto_usuario(self, texto: str):
-        resultado = self.motor.procesar_texto(texto)
-        if resultado["tipo"] == "opcion":
-            indice = resultado["indice"]
-            opcion = self.motor.obtener_info_opcion(indice)
-            if opcion:
-                destino = self.motor.transicionar(indice)
-                if not destino:
-                    self._procesando = False
-                    return
-                if hasattr(self, '_nodo_anterior') and self._nodo_anterior is not None:
-                    confirmacion = construir_mensaje_confirmacion(
-                        self._nodo_anterior, self.sesion, opcion["texto"]
-                    )
-                    self._agregar_mensaje_con_efecto(confirmacion)
-                self._nodo_anterior = self.motor.obtener_nodo_actual()
-                if self.motor.es_nodo_hoja():
-                    self._procesar_nodo_hoja()
-                else:
-                    self._procesar_nodo_decision()
-                self._procesando = False
-        elif resultado["tipo"] == "redireccion":
-            sugerencia = resultado["sugerencia"]
-            msg = sugerencia.get("mensaje", "Parece que tu estado emocional ha cambiado.")
-            self._agregar_mensaje_con_efecto(msg)
-            self._procesando = False
-        else:
-            msg = self.motor.obtener_mensaje_empatico()
-            if msg:
+        try:
+            resultado = self.motor.procesar_texto(texto)
+            if resultado["tipo"] == "opcion":
+                indice = resultado["indice"]
+                opcion = self.motor.obtener_info_opcion(indice)
+                if opcion:
+                    destino = self.motor.transicionar(indice)
+                    if not destino:
+                        return
+                    if hasattr(self, '_nodo_anterior') and self._nodo_anterior is not None:
+                        confirmacion = construir_mensaje_confirmacion(
+                            self._nodo_anterior, self.sesion, opcion["texto"]
+                        )
+                        self._agregar_mensaje_con_efecto(confirmacion)
+                    self._nodo_anterior = self.motor.obtener_nodo_actual()
+                    if self.motor.es_nodo_hoja():
+                        self._procesar_nodo_hoja()
+                    else:
+                        self._procesar_nodo_decision()
+            elif resultado["tipo"] == "redireccion":
+                sugerencia = resultado["sugerencia"]
+                msg = sugerencia.get("mensaje", "Parece que tu estado emocional ha cambiado.")
                 self._agregar_mensaje_con_efecto(msg)
             else:
-                self._agregar_mensaje_con_efecto(
-                    "No entendí del todo. Por favor, selecciona una opción de los botones."
-                )
+                msg = self.motor.obtener_mensaje_empatico()
+                if msg:
+                    self._agregar_mensaje_con_efecto(msg)
+                else:
+                    self._agregar_mensaje_con_efecto(
+                        "No entendí del todo. Por favor, selecciona una opción de los botones."
+                    )
+        except Exception as e:
+            logger.error(f"Error procesando texto: {e}")
+            self.ventana.after(0, lambda: self._agregar_mensaje_con_efecto(
+                "Ocurrió un error. Selecciona una opción de los botones."
+            ))
+        finally:
             self._procesando = False
 
     def _reiniciar_diagnostico(self):
