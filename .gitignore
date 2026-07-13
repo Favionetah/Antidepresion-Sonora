@@ -13,3 +13,4 @@ __pycache__/
 
 # Spotify OAuth cache
 .cache
+.spotify_cache.json

@@ -146,27 +146,49 @@ def limpiar_cache() -> None:
     _cache_playlists.clear()
 
 
-def obtener_dispositivo_activo(sp: spotipy.Spotify) -> Optional[dict]:
+def obtener_dispositivos(sp: spotipy.Spotify) -> list[dict]:
     try:
         dispositivos = sp.devices()
-        devices = dispositivos.get("devices", [])
-        for d in devices:
-            if d.get("is_active"):
-                return d
-        for d in devices:
-            if d.get("type") in ("computer", "speaker", "phone"):
-                return d
-        return None
+        return dispositivos.get("devices", [])
     except Exception as e:
         logger.error(f"Error al obtener dispositivos: {e}")
-        return None
+        return []
 
 
-def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> str:
+def obtener_dispositivo_activo(sp: spotipy.Spotify) -> Optional[dict]:
+    devices = obtener_dispositivos(sp)
+    for d in devices:
+        if d.get("is_active"):
+            return d
+    for d in devices:
+        if d.get("type") in ("computer", "speaker", "phone"):
+            return d
+    return None
+
+
+def verificar_cuenta_premium(sp: spotipy.Spotify) -> bool:
+    try:
+        perfil = sp.me()
+        producto = perfil.get("product", "")
+        return producto == "premium"
+    except Exception as e:
+        logger.error(f"Error al verificar cuenta: {e}")
+        return False
+
+
+def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> dict:
     resultado = ""
+    dispositivos_encontrados = obtener_dispositivos(sp)
+
+    if not verificar_cuenta_premium(sp):
+        return {
+            "resultado": "free_account",
+            "dispositivos": dispositivos_encontrados,
+        }
+
     try:
         sp.start_playback(context_uri=playlist_uri)
-        return "ok"
+        return {"resultado": "ok", "dispositivos": dispositivos_encontrados}
     except spotipy.SpotifyException as e:
         if "NO_ACTIVE_DEVICE" in str(e) or e.http_status == 404:
             resultado = "no_device"
@@ -184,7 +206,7 @@ def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> str:
             dispositivo = obtener_dispositivo_activo(sp)
             if dispositivo:
                 sp.start_playback(device_id=dispositivo["id"], context_uri=playlist_uri)
-                return "ok"
+                return {"resultado": "ok", "dispositivos": dispositivos_encontrados}
         except spotipy.SpotifyException as e:
             if e.http_status == 403:
                 resultado = "free_account"
@@ -196,7 +218,7 @@ def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> str:
             logger.error(f"Error: {e}")
             resultado = "error"
 
-    return resultado
+    return {"resultado": resultado, "dispositivos": dispositivos_encontrados}
 
 
 def obtener_canciones_playlist(sp: spotipy.Spotify, playlist_id: str, limit: int = 10) -> list[dict]:

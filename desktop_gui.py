@@ -600,28 +600,68 @@ class ChatbotSBCApp:
         try:
             sp = spotify.crear_cliente(self.token_spotify)
             uri = f"spotify:playlist:{playlist['id']}"
-            resultado = spotify.reproducir_playlist(sp, uri)
-            if resultado == "ok":
+            res = spotify.reproducir_playlist(sp, uri)
+            if res["resultado"] == "ok":
                 self.ventana.after(0, lambda: self._agregar_mensaje(
                     "Reproduciendo en tu dispositivo activo"
                 ))
                 return
-            elif resultado == "free_account":
-                pass
-            elif resultado == "no_device":
-                self._mostrar_sin_dispositivo(playlist)
+            elif res["resultado"] == "free_account":
+                self._mostrar_sin_dispositivo(playlist, res["dispositivos"], free=True)
+            elif res["resultado"] == "no_device":
+                self._mostrar_sin_dispositivo(playlist, res["dispositivos"])
             else:
-                pass
+                self._mostrar_sin_dispositivo(playlist, res["dispositivos"])
         except Exception as e:
             logger.error(f"Error reproducción: {e}")
 
-    def _mostrar_sin_dispositivo(self, playlist: dict) -> None:
-        msg = (
-            "No encontré un dispositivo de Spotify activo. "
-            "Abre Spotify en tu celular o computadora, "
-            "reproduce algo para activarlo, y vuelve aquí."
-        )
+    def _mostrar_sin_dispositivo(self, playlist: dict, dispositivos: list[dict], free: bool = False) -> None:
+        if free:
+            msg = (
+                "Tu cuenta de Spotify es **Gratuita (Free)**, "
+                "no permite reproducción remota. "
+                "Abre el enlace de la playlist directamente en Spotify."
+            )
+        elif not dispositivos:
+            msg = (
+                "No detecté ningún dispositivo de Spotify. "
+                "Asegúrate de tener Spotify abierto en tu "
+                "celular o computadora y reproduce algo primero."
+            )
+        else:
+            nombres = [d.get("name", "Desconocido") for d in dispositivos]
+            activos = [d.get("name", "Desconocido") for d in dispositivos if d.get("is_active")]
+            if activos:
+                msg = (
+                    f"Tienes dispositivos activos: {', '.join(activos)}. "
+                    "Parece que hubo un error al reproducir. "
+                    "Intenta de nuevo."
+                )
+            else:
+                msg = (
+                    f"Dispositivos detectados: {', '.join(nombres)}. "
+                    "Ninguno está activo. "
+                    "Abre Spotify y reproduce algo para activarlo, luego "
+                    "presiona 'Reintentar' abajo."
+                )
         self.ventana.after(0, lambda: self._agregar_mensaje(msg))
+        self._mostrar_boton_reintentar(playlist)
+
+    def _mostrar_boton_reintentar(self, playlist: dict) -> None:
+        def reintentar():
+            self._intentar_reproduccion(playlist)
+        btn = ctk.CTkButton(
+            self._opciones_frame,
+            text="Reintentar reproducción",
+            command=reintentar,
+            fg_color="#E67E22",
+            hover_color="#D35400",
+            text_color="white",
+            corner_radius=20,
+            height=40,
+        )
+        btn.pack(fill="x", padx=5, pady=3)
+        self._botones_dinamicos.append(btn)
 
     def _iniciar_sesion_spotify(self) -> None:
         global _callback_code, _callback_event

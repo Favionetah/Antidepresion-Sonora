@@ -415,12 +415,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             sp = spotify.crear_cliente(sesion.token_spotify)
             uri = f"spotify:playlist:{sesion.playlist_recomendada['id']}"
             res = spotify.reproducir_playlist(sp, uri)
-            if res == "ok":
+            if res["resultado"] == "ok":
                 await query.edit_message_text("Reproduciendo en tu dispositivo activo 🎧")
-            elif res == "no_device":
+            elif res["resultado"] == "no_device":
                 await query.edit_message_text(
                     "No encontré un dispositivo activo. Abre Spotify en tu celular "
                     "o computadora y selecciona una canción primero."
+                )
+            elif res["resultado"] == "free_account":
+                await query.edit_message_text(
+                    "Tu cuenta de Spotify es Free y no permite "
+                    "reproducción remota. Abre el enlace de la playlist."
                 )
             else:
                 await query.edit_message_text(
