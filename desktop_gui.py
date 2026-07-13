@@ -651,7 +651,7 @@ class ChatbotSBCApp:
         def reintentar():
             self._intentar_reproduccion(playlist)
         btn = ctk.CTkButton(
-            self._opciones_frame,
+            self._chat_frame,
             text="Reintentar reproducción",
             command=reintentar,
             fg_color="#E67E22",

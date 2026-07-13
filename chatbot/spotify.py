@@ -180,12 +180,6 @@ def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> dict:
     resultado = ""
     dispositivos_encontrados = obtener_dispositivos(sp)
 
-    if not verificar_cuenta_premium(sp):
-        return {
-            "resultado": "free_account",
-            "dispositivos": dispositivos_encontrados,
-        }
-
     try:
         sp.start_playback(context_uri=playlist_uri)
         return {"resultado": "ok", "dispositivos": dispositivos_encontrados}
