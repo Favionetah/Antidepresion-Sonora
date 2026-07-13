@@ -626,7 +626,9 @@ class ChatbotSBCApp:
             msg = (
                 "No detecté ningún dispositivo de Spotify. "
                 "Asegúrate de tener Spotify abierto en tu "
-                "celular o computadora y reproduce algo primero."
+                "celular o computadora y **reproduce cualquier canción** "
+                "(aunque sea por 2 segundos) para que Spotify registre el "
+                "dispositivo como activo. Luego presiona 'Reintentar'."
             )
         else:
             nombres = [d.get("name", "Desconocido") for d in dispositivos]
@@ -639,10 +641,14 @@ class ChatbotSBCApp:
                 )
             else:
                 msg = (
-                    f"Dispositivos detectados: {', '.join(nombres)}. "
-                    "Ninguno está activo. "
-                    "Abre Spotify y reproduce algo para activarlo, luego "
-                    "presiona 'Reintentar' abajo."
+                    f"Dispositivos detectados: {', '.join(nombres)}.\n\n"
+                    "La API de Spotify necesita que el dispositivo esté "
+                    "**reproduciendo algo** para considerarlo activo.\n\n"
+                    "**Pasos:**\n"
+                    "1. Abre Spotify en tu PC o Chrome\n"
+                    "2. **Reproduce cualquier canción** (2 segundos basta)\n"
+                    "3. Ahora ese dispositivo está activo\n"
+                    "4. Presiona 'Reintentar' abajo"
                 )
         self.ventana.after(0, lambda: self._agregar_mensaje(msg))
         self._mostrar_boton_reintentar(playlist)

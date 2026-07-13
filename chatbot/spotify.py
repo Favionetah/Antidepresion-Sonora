@@ -21,7 +21,7 @@ def crear_oauth() -> SpotifyOAuth:
         client_id=SPOTIPY_CLIENT_ID,
         client_secret=SPOTIPY_CLIENT_SECRET,
         redirect_uri=SPOTIPY_REDIRECT_URI,
-        scope="user-read-playback-state user-modify-playback-state",
+        scope="user-read-playback-state user-modify-playback-state user-read-private",
         cache_path=None,
     )
 
@@ -180,6 +180,10 @@ def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> dict:
     resultado = ""
     dispositivos_encontrados = obtener_dispositivos(sp)
 
+    logger.info(f"Dispositivos disponibles: {len(dispositivos_encontrados)}")
+    for d in dispositivos_encontrados:
+        logger.info(f"  - {d.get('name')}: active={d.get('is_active')}, id={d.get('id')[:8]}...")
+
     try:
         sp.start_playback(context_uri=playlist_uri)
         return {"resultado": "ok", "dispositivos": dispositivos_encontrados}
@@ -195,22 +199,23 @@ def reproducir_playlist(sp: spotipy.Spotify, playlist_uri: str) -> dict:
         logger.error(f"Error inesperado: {e}")
         resultado = "error"
 
-    if resultado != "ok":
-        try:
-            dispositivo = obtener_dispositivo_activo(sp)
-            if dispositivo:
-                sp.start_playback(device_id=dispositivo["id"], context_uri=playlist_uri)
+    if resultado in ("no_device", "error") and dispositivos_encontrados:
+        for dispositivo in dispositivos_encontrados:
+            did = dispositivo.get("id", "")
+            if not did:
+                continue
+            try:
+                sp.start_playback(device_id=did, context_uri=playlist_uri)
+                logger.info(f"Reproduciendo en: {dispositivo.get('name')}")
                 return {"resultado": "ok", "dispositivos": dispositivos_encontrados}
-        except spotipy.SpotifyException as e:
-            if e.http_status == 403:
-                resultado = "free_account"
-            elif not dispositivo:
-                resultado = "no_device"
-            else:
-                resultado = "error"
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            resultado = "error"
+            except spotipy.SpotifyException as e:
+                if e.http_status == 403:
+                    resultado = "free_account"
+                logger.warning(f"Fallo en {dispositivo.get('name')}: {e}")
+                continue
+            except Exception as e:
+                logger.warning(f"Error inesperado en {dispositivo.get('name')}: {e}")
+                continue
 
     return {"resultado": resultado, "dispositivos": dispositivos_encontrados}
 
