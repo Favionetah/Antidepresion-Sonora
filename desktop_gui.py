@@ -329,7 +329,7 @@ class ChatbotSBCApp:
         self._chat.configure(fg_color=self._t["chat"], text_color=self._t["text"])
         self._chat.tag_config("bubble_bot", foreground=self._t["bubble_bot_text"])
         self._chat.tag_config("bubble_bot_gold", foreground=self._t["gold"])
-        self._chat.tag_config("bubble_user", foreground=self._t["bubble_user_text"])
+        self._chat.tag_config("bubble_user", foreground=self._t["primary"])
         self._chat.tag_config("typing", foreground=self._t["text_sec"])
         self._chat.tag_config("diagnostico", foreground=self._t["bubble_bot_text"])
         self._chat.tag_config("separador", foreground=self._t["border"])
@@ -479,7 +479,7 @@ class ChatbotSBCApp:
                               spacing1=2, spacing3=4)
 
         self._chat.tag_config("bubble_user", lmargin1=72, lmargin2=68, rmargin=16,
-                              foreground=self._t["bubble_user_text"],
+                              foreground=self._t["primary"],
                               spacing1=5, spacing3=5, justify="right")
 
         self._chat.tag_config("typing", lmargin1=16, rmargin=72,
@@ -872,9 +872,27 @@ class ChatbotSBCApp:
 
     def _procesar_nodo_hoja(self):
         diagnostico = self.motor.obtener_diagnostico()
-        self._agregar_mensaje("─── ⋆⋅☆⋅⋆ ───", tag="separador")
-        self._agregar_mensaje_con_efecto(diagnostico, tag="diagnostico")
-        self._agregar_mensaje("─── ⋆⋅☆⋅⋆ ───", tag="separador")
+
+        card = ctk.CTkFrame(
+            self._chat_frame, fg_color="#1A5533",
+            corner_radius=14,
+        )
+        card.pack(fill="x", padx=20, pady=(8, 4))
+        self._botones_opciones_actuales.append(card)
+
+        ctk.CTkLabel(
+            card, text="DIAGNÓSTICO",
+            font=("Segoe UI", 11, "bold"),
+            text_color="#81C784", anchor="w",
+        ).pack(fill="x", padx=16, pady=(12, 2))
+
+        ctk.CTkLabel(
+            card, text=diagnostico,
+            font=("Segoe UI", 13),
+            text_color="white", anchor="w",
+            wraplength=440, justify="left",
+        ).pack(fill="x", padx=16, pady=(4, 14))
+
         self._ejecutar_spotify()
 
     def _ejecutar_spotify(self):

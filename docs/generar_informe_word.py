@@ -74,9 +74,10 @@ def crear_informe():
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run("Arquitectura: FSM (Finite State Machine) con 29 Nodos\n"
-                     "Motor de Reglas: Base de Conocimiento Singleton + Detección de Emociones + Matcher de Intenciones\n"
-                     "Integración: Spotify API via OAuth 2.0\n"
-                     "Interfaz: CustomTkinter (Desktop) + python-telegram-bot")
+                     "Motor de Reglas: Base de Conocimiento Singleton + Deteccion de Emociones + Matcher de Intenciones\n"
+                     "Integracion: Spotify API via OAuth 2.0\n"
+                     "Interfaz: CustomTkinter (Desktop) + python-telegram-bot\n"
+                     "Version: 2.0 (Fase 2 - Integracion Hibrida)")
     run.font.size = Pt(10)
     run.font.color.rgb = RGBColor(0x54, 0x6e, 0x7a)
 
