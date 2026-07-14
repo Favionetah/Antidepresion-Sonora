@@ -14,7 +14,7 @@ EMOCIONES_PALABRAS: dict[str, list[str]] = {
         "desesperanza", "soledad", "solo", "vacío", "desmotivado", "desgana",
         "pesimista", "nostalgia", "pena", "sufrimiento", "desalentado",
         "descorazonado", "afligido", "decaído", "derrotado", "roto",
-        "fatal", "pesimo", "horrible",
+        "fatal", "pesimo", "horrible", "69",
     ],
     "miedo": [
         "miedo", "ansiedad", "ansioso", "nervioso", "panico", "temeroso",
