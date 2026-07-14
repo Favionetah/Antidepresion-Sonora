@@ -776,9 +776,15 @@ class ChatbotSBCApp:
                     else:
                         self._procesar_nodo_decision()
             elif resultado["tipo"] == "redireccion":
-                sugerencia = resultado["sugerencia"]
-                msg = sugerencia.get("mensaje", "Parece que tu estado emocional ha cambiado.")
+                msg = self.motor.obtener_mensaje_empatico()
+                if not msg:
+                    msg = "Parece que tu estado emocional ha cambiado."
                 self._agregar_mensaje_con_efecto(msg)
+                opciones = self.motor.obtener_opciones()
+                destinos = resultado["sugerencia"].get("destinos", [])
+                opciones_filtradas = [o for o in opciones if o.get("destino", "") in destinos]
+                if opciones_filtradas:
+                    self.ventana.after(DELAY_MS + 200, lambda: self._mostrar_botones_opciones(opciones_filtradas))
             else:
                 msg = self.motor.obtener_mensaje_empatico()
                 if msg:

@@ -6,7 +6,7 @@ EMOCIONES_PALABRAS: dict[str, list[str]] = {
         "enojo", "ira", "rabia", "frustrado", "frustracion", "molesto", "enojado",
         "furioso", "irritable", "irritado", "cabreado", "enfadado", "indignado",
         "resentido", "amargado", "hostil", "agresivo", "bronca", "coraje",
-        "disgustado", "harto", "fastidiado", "impaciente", "exasperado",
+        "disgustado", "harto", "fastidiado", "impaciente", "exasperado", "Six Seven", "67", "six seven", "six-seven", "sixseven",
     ],
     "tristeza": [
         "triste", "tristeza", "desanimo", "apatia", "melancolia", "deprimido",
@@ -78,7 +78,7 @@ def _normalizar(texto: str) -> str:
     texto = texto.lower()
     texto = texto.replace("á", "a").replace("é", "e").replace("í", "i")
     texto = texto.replace("ó", "o").replace("ú", "u").replace("ü", "u").replace("ñ", "n")
-    texto = re.sub(r"[^a-z\s]", " ", texto)
+    texto = re.sub(r"[^a-z0-9\s]", " ", texto)
     texto = re.sub(r"\s+", " ", texto).strip()
     return texto
 
@@ -130,6 +130,3 @@ def _detectar_intensidad(normalizado: str, max_score: int) -> str:
         return "media"
     return "baja"
 
-
-def emocion_a_rama(emocion: str) -> Optional[str]:
-    return EMOCION_A_RAMA.get(emocion)
