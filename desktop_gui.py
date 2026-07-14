@@ -529,7 +529,7 @@ class ChatbotSBCApp:
     def _construir_player(self):
         self._player_frame = ctk.CTkFrame(
             self._chat_frame, fg_color=self._t["player_bg"],
-            corner_radius=14, height=88,
+            corner_radius=14, height=100,
         )
         self._player_frame.pack(fill="x", padx=8, pady=(6, 8))
         self._player_frame.pack_propagate(False)
@@ -550,6 +550,7 @@ class ChatbotSBCApp:
             info_frame, text="Playlist lista",
             font=("Segoe UI", 12, "bold"),
             text_color=self._t["player_text"], anchor="w",
+            wraplength=280,
         )
         self._player_cancion_label.pack(fill="x", padx=(0, 4))
 
@@ -606,13 +607,29 @@ class ChatbotSBCApp:
         if self._player_visible:
             return
         self._player_visible = True
-        self._player_frame.pack(fill="x", padx=8, pady=(6, 8))
+        self._player_frame.pack(fill="x", padx=8, pady=(6, 8), before=self._chat)
         self._iniciar_polling()
 
     def _ocultar_player(self):
         self._player_visible = False
         self._detener_polling()
         self._player_frame.pack_forget()
+
+    def _mostrar_banner_spotify(self):
+        if hasattr(self, '_spotify_banner') and self._spotify_banner.winfo_exists():
+            return
+        self._spotify_banner = ctk.CTkFrame(
+            self._chat_frame, fg_color=self._t["player_bg"],
+            corner_radius=14, height=54,
+        )
+        self._spotify_banner.pack(fill="x", padx=8, pady=(6, 8), before=self._chat)
+        self._botones_opciones_actuales.append(self._spotify_banner)
+        ctk.CTkLabel(
+            self._spotify_banner,
+            text="Conecta con Spotify para usar el reproductor",
+            font=("Segoe UI", 12, "bold"),
+            text_color="#1DB954",
+        ).pack(fill="both", expand=True)
 
     def _player_toggle(self):
         if not self._sp_cliente:
@@ -919,9 +936,12 @@ class ChatbotSBCApp:
         self.ventana.after(0, lambda u=url: self._agregar_mensaje(u))
         self._resultado_playlist = resultado
         self._after(1000, self._mostrar_acciones_playlist)
-        self._after(1500, self._mostrar_player)
-        if self._sp_cliente:
-            self._after(2000, self._player_reproducir_playlist)
+        if self.token_spotify:
+            self._after(1500, self._mostrar_player)
+            if self._sp_cliente:
+                self._after(2000, self._player_reproducir_playlist)
+        else:
+            self._after(1500, self._mostrar_banner_spotify)
 
     def _mostrar_acciones_playlist(self):
         if not hasattr(self, '_resultado_playlist'):
@@ -1045,6 +1065,7 @@ class ChatbotSBCApp:
         self.token_spotify = None
         self._sp_cliente = None
         self._detener_polling()
+        self._ocultar_player()
         self._btn_spotify.configure(
             text="Spotify",
             command=self._iniciar_sesion_spotify,
@@ -1188,7 +1209,7 @@ class ChatbotSBCApp:
         self._chat.configure(state="normal")
         self._chat.delete("1.0", "end")
         self._chat.configure(state="disabled")
-        for attr in ["_tag_typing_start"]:
+        for attr in ["_tag_typing_start", "_spotify_banner"]:
             if hasattr(self, attr):
                 delattr(self, attr)
         self._typing_activo = False
