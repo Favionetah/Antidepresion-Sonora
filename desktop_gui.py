@@ -11,7 +11,7 @@ from urllib.parse import urlparse, parse_qs
 
 import spotipy
 import customtkinter as ctk
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 from spotipy.oauth2 import SpotifyOAuth
 
 from chatbot import MotorFSM, SesionSBC
@@ -24,53 +24,57 @@ from chatbot.frases import (
 logger = logging.getLogger(__name__)
 
 LIGHT = {
-    "bg": "#F5F5F7",
+    "bg": "#F5F0EB",
     "card": "#FFFFFF",
-    "primary": "#742DDD",
-    "primary_hover": "#6211C8",
-    "accent": "#A855F7",
-    "accent_hover": "#8D39D0",
+    "primary": "#D4933A",
+    "primary_hover": "#B87D2E",
+    "accent": "#8B6F47",
+    "accent_hover": "#7A5F3A",
     "text": "#1D1D1F",
     "text_sec": "#86868B",
-    "border": "#E5E5EA",
+    "border": "#E5E0D8",
     "red": "#E05A5A",
     "red_hover": "#CC4444",
-    "chat": "#F9F9FB",
-    "bubble_bot": "#F2F2F7",
-    "bubble_user": "#742DDD",
+    "chat": "#FAF8F5",
+    "bubble_bot": "#FFFFFF",
+    "bubble_user": "#D4933A",
     "bubble_user_text": "#FFFFFF",
     "bubble_bot_text": "#1D1D1F",
     "input_bg": "#FFFFFF",
-    "input_border": "#E5E5EA",
+    "input_border": "#E5E0D8",
     "green": "#1DB954",
-    "player_bg": "#1C1C1E",
+    "amber": "#D4933A",
+    "player_bg": "#1A1A1A",
     "player_text": "#FFFFFF",
-    "player_sec": "#8E8E93",
+    "player_sec": "#A0A0A0",
+    "gold": "#D4933A",
 }
 
 DARK = {
-    "bg": "#0D0D12",
-    "card": "#1A1A22",
-    "primary": "#742DDD",
-    "primary_hover": "#6211C8",
-    "accent": "#A855F7",
-    "accent_hover": "#8D39D0",
+    "bg": "#1C1C1E",
+    "card": "#2C2C2E",
+    "primary": "#D4933A",
+    "primary_hover": "#B87D2E",
+    "accent": "#A88B6F",
+    "accent_hover": "#967A60",
     "text": "#F5F5F7",
     "text_sec": "#98989D",
-    "border": "#2C2C35",
+    "border": "#38383A",
     "red": "#E05A5A",
     "red_hover": "#CC4444",
-    "chat": "#13131A",
-    "bubble_bot": "#252530",
-    "bubble_user": "#742DDD",
+    "chat": "#222224",
+    "bubble_bot": "#2C2C2E",
+    "bubble_user": "#D4933A",
     "bubble_user_text": "#FFFFFF",
     "bubble_bot_text": "#F5F5F7",
-    "input_bg": "#1A1A22",
-    "input_border": "#2C2C35",
+    "input_bg": "#2C2C2E",
+    "input_border": "#38383A",
     "green": "#1DB954",
-    "player_bg": "#0A0A0E",
+    "amber": "#D4933A",
+    "player_bg": "#0A0A0A",
     "player_text": "#FFFFFF",
     "player_sec": "#8E8E93",
+    "gold": "#D4933A",
 }
 
 ANCHO = 520
@@ -223,7 +227,7 @@ class SplashScreen(ctk.CTkToplevel):
             r2 = int(r * (1 - i / 120))
             draw.ellipse(
                 [(cx - r2, cy - r2), (cx + r2, cy + r2)],
-                outline=(116, 45, 221, alpha),
+                outline=(212, 147, 58, alpha),
                 width=1,
             )
         ctk_img = ctk.CTkImage(grad, size=(w, h))
@@ -242,88 +246,16 @@ class SplashScreen(ctk.CTkToplevel):
         self.destroy()
 
 
-def _generar_icono_svg(nombre: str, size: int = 22) -> ctk.CTkImage:
-    light = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    dark = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    dl = ImageDraw.Draw(light)
-    dd = ImageDraw.Draw(dark)
-    c_light = (0, 0, 0, 180)
-    c_dark = (245, 245, 247, 220)
-    m = size // 2
-    if nombre == "play":
-        pts = [(m-size//6, m-size//4), (m-size//6, m+size//4), (m+size//4, m)]
-        dl.polygon(pts, fill=c_light); dd.polygon(pts, fill=c_dark)
-    elif nombre == "pause":
-        w, h2 = max(3, size//6), size//3
-        dl.rectangle([(m-w-2, m-h2//2), (m-2, m+h2//2)], fill=c_light)
-        dl.rectangle([(m+2, m-h2//2), (m+w+2, m+h2//2)], fill=c_light)
-        dd.rectangle([(m-w-2, m-h2//2), (m-2, m+h2//2)], fill=c_dark)
-        dd.rectangle([(m+2, m-h2//2), (m+w+2, m+h2//2)], fill=c_dark)
-    elif nombre == "prev":
-        dl.polygon([(size//4, m), (3*size//4, m-size//3), (3*size//4, m+size//3)], fill=c_light)
-        dl.rectangle([(3*size//4+2, m-size//3), (3*size//4+5, m+size//3)], fill=c_light)
-        dd.polygon([(size//4, m), (3*size//4, m-size//3), (3*size//4, m+size//3)], fill=c_dark)
-        dd.rectangle([(3*size//4+2, m-size//3), (3*size//4+5, m+size//3)], fill=c_dark)
-    elif nombre == "next":
-        dl.polygon([(3*size//4, m), (size//4, m-size//3), (size//4, m+size//3)], fill=c_light)
-        dl.rectangle([(size//4-5, m-size//3), (size//4-2, m+size//3)], fill=c_light)
-        dd.polygon([(3*size//4, m), (size//4, m-size//3), (size//4, m+size//3)], fill=c_dark)
-        dd.rectangle([(size//4-5, m-size//3), (size//4-2, m+size//3)], fill=c_dark)
-    elif nombre == "moon":
-        dl.ellipse([(4, 2), (size-2, size-2)], fill=(0, 0, 0, 0), outline=c_light, width=2)
-        dl.ellipse([(6, 0), (size-4, size-4)], fill=(255, 255, 255, 255), outline=(0, 0, 0, 0))
-        dd.ellipse([(4, 2), (size-2, size-2)], fill=(0, 0, 0, 0), outline=c_dark, width=2)
-        dd.ellipse([(6, 0), (size-4, size-4)], fill=(0, 0, 0, 0), outline=(0, 0, 0, 0))
-    elif nombre == "sun":
-        dl.ellipse([(size//4, size//4), (3*size//4, 3*size//4)], fill=(0, 0, 0, 0), outline=c_light, width=2)
-        dd.ellipse([(size//4, size//4), (3*size//4, 3*size//4)], fill=(0, 0, 0, 0), outline=c_dark, width=2)
-        for ang in [0, 45, 90, 135, 180, 225, 270, 315]:
-            rad = ang * 3.14159 / 180
-            x1, y1 = m + int(0.38*size*__import__('math').cos(rad)), m + int(0.38*size*__import__('math').sin(rad))
-            x2, y2 = m + int(0.48*size*__import__('math').cos(rad)), m + int(0.48*size*__import__('math').sin(rad))
-            dl.line([(x1, y1), (x2, y2)], fill=c_light, width=2)
-            dd.line([(x1, y1), (x2, y2)], fill=c_dark, width=2)
-    elif nombre == "send":
-        dl.polygon([(size-4, m), (4, 4), (size//2+2, m), (4, size-4)], fill=(0, 0, 0, 180))
-        dd.polygon([(size-4, m), (4, 4), (size//2+2, m), (4, size-4)], fill=(245, 245, 247, 220))
-    elif nombre == "spotify":
-        dl.ellipse([(2, 2), (size-2, size-2)], fill=(29, 185, 84, 255))
-        dd.ellipse([(2, 2), (size-2, size-2)], fill=(29, 185, 84, 255))
-        dl.text((size//2, size//2-1), "S", fill="white", anchor="mm", font=None)
-        dd.text((size//2, size//2-1), "S", fill="white", anchor="mm", font=None)
-    elif nombre == "volume":
-        dl.polygon([(size//4, m-size//4), (size//4, m+size//4), (size//2-2, m+size//4), (size//2-2, m-size//4)], fill=c_light)
-        dl.arc([(size//2-4, m-size//3), (size-4, m+size//3)], -45, 45, fill=c_light, width=2)
-        dd.polygon([(size//4, m-size//4), (size//4, m+size//4), (size//2-2, m+size//4), (size//2-2, m-size//4)], fill=c_dark)
-        dd.arc([(size//2-4, m-size//3), (size-4, m+size//3)], -45, 45, fill=c_dark, width=2)
-    elif nombre == "shuffle":
-        dl.line([(3, 4), (size-3, size-4)], fill=c_light, width=2)
-        dl.line([(size-8, 4), (size-3, 4), (size-3, 9)], fill=c_light, width=2)
-        dl.line([(8, size-4), (3, size-4), (3, size-9)], fill=c_light, width=2)
-        dd.line([(3, 4), (size-3, size-4)], fill=c_dark, width=2)
-        dd.line([(size-8, 4), (size-3, 4), (size-3, 9)], fill=c_dark, width=2)
-        dd.line([(8, size-4), (3, size-4), (3, size-9)], fill=c_dark, width=2)
-    elif nombre == "repeat":
-        dl.arc([(4, 4), (size-4, size-4)], 30, 330, fill=c_light, width=2)
-        dl.polygon([(size-6, 4), (size-2, 4), (size-4, 8)], fill=c_light)
-        dd.arc([(4, 4), (size-4, size-4)], 30, 330, fill=c_dark, width=2)
-        dd.polygon([(size-6, 4), (size-2, 4), (size-4, 8)], fill=c_dark)
-    elif nombre == "add":
-        dl.line([(size//2, 5), (size//2, size-5)], fill=c_light, width=2)
-        dl.line([(5, size//2), (size-5, size//2)], fill=c_light, width=2)
-        dd.line([(size//2, 5), (size//2, size-5)], fill=c_dark, width=2)
-        dd.line([(5, size//2), (size-5, size//2)], fill=c_dark, width=2)
-    elif nombre == "check":
-        dl.line([(4, size//2), (size//3, size-6)], fill=c_light, width=3)
-        dl.line([(size//3, size-6), (size-4, 5)], fill=c_light, width=3)
-        dd.line([(4, size//2), (size//3, size-6)], fill=c_dark, width=3)
-        dd.line([(size//3, size-6), (size-4, 5)], fill=c_dark, width=3)
-    elif nombre == "close":
-        dl.line([(4, 4), (size-4, size-4)], fill=c_light, width=2)
-        dl.line([(size-4, 4), (4, size-4)], fill=c_light, width=2)
-        dd.line([(4, 4), (size-4, size-4)], fill=c_dark, width=2)
-        dd.line([(size-4, 4), (4, size-4)], fill=c_dark, width=2)
-    return ctk.CTkImage(light, dark, size=(size, size))
+def _cargar_icono(nombre: str, size: int = 22) -> Optional[ctk.CTkImage]:
+    ruta = os.path.join(RUTA_ICONOS, f"{nombre}.png")
+    if not os.path.exists(ruta):
+        return None
+    try:
+        pil = Image.open(ruta).resize((size, size), Image.LANCZOS)
+        return ctk.CTkImage(pil, size=(size, size))
+    except Exception as e:
+        logger.warning(f"No se pudo cargar icono {nombre}: {e}")
+        return None
 
 
 class ChatbotSBCApp:
@@ -378,13 +310,11 @@ class ChatbotSBCApp:
         self._construir_input()
 
     def _cargar_iconos(self):
-        for nombre in ("play", "pause", "prev", "next", "moon", "sun", "send", "spotify",
-                        "volume", "shuffle", "repeat", "add", "check", "close"):
-            try:
-                icono = _generar_icono_svg(nombre, 22)
+        for nombre in ("spotify", "send", "retry", "disconnect", "new", "check", "moon", "sun",
+                        "play", "pause", "prev", "next", "volume", "shuffle", "repeat"):
+            icono = _cargar_icono(nombre)
+            if icono:
                 self._iconos[nombre] = icono
-            except Exception as e:
-                logger.warning(f"No se pudo generar icono {nombre}: {e}")
 
     def _aplicar_tema(self):
         self._t = dict(DARK if self._dark else LIGHT)
@@ -393,8 +323,16 @@ class ChatbotSBCApp:
 
         self.ventana.configure(fg_color=self._t["bg"])
         self._barra_sup.configure(fg_color=self._t["card"], border_color=self._t["border"])
-        if hasattr(self, '_chat_scroll'):
-            self._chat_scroll.configure(fg_color=self._t["chat"])
+        if hasattr(self, '_shadow_frame'):
+            self._shadow_frame.configure(fg_color=self._t["border"])
+        self._chat_frame.configure(fg_color=self._t["card"])
+        self._chat.configure(fg_color=self._t["chat"], text_color=self._t["text"])
+        self._chat.tag_config("bubble_bot", foreground=self._t["bubble_bot_text"])
+        self._chat.tag_config("bubble_bot_gold", foreground=self._t["gold"])
+        self._chat.tag_config("bubble_user", foreground=self._t["bubble_user_text"])
+        self._chat.tag_config("typing", foreground=self._t["text_sec"])
+        self._chat.tag_config("diagnostico", foreground=self._t["bubble_bot_text"])
+        self._chat.tag_config("separador", foreground=self._t["border"])
         self._input_frame.configure(fg_color=self._t["card"], border_color=self._t["input_border"])
         self._entry.configure(text_color=self._t["text"], placeholder_text_color=self._t["text_sec"])
         self._btn_enviar.configure(
@@ -418,8 +356,7 @@ class ChatbotSBCApp:
 
         self._btn_tema.configure(
             image=self._iconos.get("sun" if self._dark else "moon"),
-            fg_color=self._t["input_bg"], hover_color=self._t["border"],
-            border_color=self._t["border"],
+            fg_color=self._t["card"], hover_color=self._t["border"],
         )
 
         if hasattr(self, '_player_frame'):
@@ -427,16 +364,23 @@ class ChatbotSBCApp:
             self._player_cancion_label.configure(text_color=self._t["player_text"])
             self._player_artista_label.configure(text_color=self._t["player_sec"])
             self._player_progresso.configure(
-                fg_color=self._t["player_sec"], progress_color=self._t["primary"],
+                fg_color=self._t["player_sec"], progress_color=self._t["gold"],
             )
 
-        if hasattr(self, '_mensajes_container'):
-            for w in self._mensajes_container.winfo_children():
-                try:
-                    if isinstance(w, ctk.CTkFrame):
-                        w.configure(fg_color=self._t["bubble_bot"])
-                except Exception:
-                    pass
+        for btn in self._botones_opciones_actuales:
+            try:
+                texto = btn.cget("text")
+                if "Nuevo" in texto:
+                    btn.configure(text_color=self._t["text_sec"], border_color=self._t["border"])
+                elif "Abrir" in texto:
+                    btn.configure(fg_color="#1DB954", text_color="white")
+                elif "Reproducir" in texto or "Reintentar" in texto:
+                    btn.configure(fg_color=self._t["primary"], text_color="white", hover_color=self._t["primary_hover"])
+                else:
+                    btn.configure(fg_color=self._t["bubble_bot"], text_color=self._t["text"],
+                                  border_color=self._t["border"], hover_color=self._t["border"])
+            except Exception:
+                pass
 
     def _toggle_tema(self):
         self._dark = not self._dark
@@ -496,38 +440,59 @@ class ChatbotSBCApp:
             marco, text="", width=34, height=34,
             image=self._iconos.get("moon"),
             command=self._toggle_tema,
-            fg_color=self._t["input_bg"], hover_color=self._t["border"],
+            fg_color="transparent", hover_color=self._t["border"],
             corner_radius=17,
-            border_width=1, border_color=self._t["border"],
         )
         self._btn_tema.pack(side="right", padx=(0, 0))
 
     def _construir_chat(self):
-        self._chat_frame = ctk.CTkFrame(
+        self._shadow_frame = ctk.CTkFrame(
             self.ventana, fg_color=self._t["border"],
             corner_radius=16,
         )
-        self._chat_frame.pack(fill="both", expand=True, padx=14, pady=(10, 6))
-        self._chat_frame.pack_propagate(False)
+        self._shadow_frame.pack(fill="both", expand=True, padx=14, pady=(10, 6))
+        self._shadow_frame.pack_propagate(False)
 
-        inner = ctk.CTkFrame(
-            self._chat_frame, fg_color=self._t["card"],
+        self._chat_frame = ctk.CTkFrame(
+            self._shadow_frame, fg_color=self._t["card"],
             corner_radius=16, border_width=0,
         )
-        inner.pack(fill="both", expand=True, padx=1, pady=1)
+        self._chat_frame.pack(fill="both", expand=True, padx=1, pady=1)
 
-        self._chat_scroll = ctk.CTkScrollableFrame(
-            inner, fg_color=self._t["chat"],
+        self._chat = ctk.CTkTextbox(
+            self._chat_frame,
+            wrap="word", state="disabled",
+            fg_color=self._t["chat"], text_color=self._t["text"],
+            font=("Segoe UI", 13),
             corner_radius=12, border_width=0,
             scrollbar_button_color=self._t["primary"],
             scrollbar_button_hover_color=self._t["primary_hover"],
         )
-        self._chat_scroll.pack(fill="both", expand=True, padx=6, pady=6)
+        self._chat.pack(fill="both", expand=True, padx=8, pady=(8, 0))
 
-        self._mensajes_container = ctk.CTkFrame(self._chat_scroll, fg_color="transparent")
-        self._mensajes_container.pack(fill="x", expand=True, padx=8, pady=8)
+        self._chat.tag_config("bubble_bot", lmargin1=16, lmargin2=12, rmargin=72,
+                              foreground=self._t["bubble_bot_text"],
+                              spacing1=5, spacing3=5)
 
-        self._typing_label: Optional[ctk.CTkLabel] = None
+        self._chat.tag_config("bubble_bot_gold", lmargin1=16, lmargin2=12, rmargin=72,
+                              foreground=self._t["gold"],
+                              spacing1=2, spacing3=4)
+
+        self._chat.tag_config("bubble_user", lmargin1=72, lmargin2=68, rmargin=16,
+                              foreground=self._t["bubble_user_text"],
+                              spacing1=5, spacing3=5, justify="right")
+
+        self._chat.tag_config("typing", lmargin1=16, rmargin=72,
+                              foreground=self._t["text_sec"], spacing1=2, spacing3=2)
+
+        self._chat.tag_config("diagnostico", lmargin1=16, lmargin2=12, rmargin=72,
+                              foreground=self._t["bubble_bot_text"],
+                              spacing1=5, spacing3=8)
+
+        self._chat.tag_config("separador", lmargin1=16, rmargin=16,
+                              foreground=self._t["border"],
+                              spacing1=4, spacing3=4)
+
         self._construir_player()
 
     def _construir_input(self):
@@ -598,7 +563,7 @@ class ChatbotSBCApp:
         self._player_progresso = ctk.CTkProgressBar(
             info_frame, height=2,
             fg_color=self._t["player_sec"],
-            progress_color=self._t["primary"],
+            progress_color=self._t["gold"],
             corner_radius=1,
         )
         self._player_progresso.pack(fill="x", padx=(0, 4), pady=(4, 0))
@@ -620,7 +585,7 @@ class ChatbotSBCApp:
             control_frame, text="", width=36, height=36,
             image=self._iconos.get("play"),
             command=self._player_toggle,
-            fg_color=self._t["primary"], hover_color=self._t["primary_hover"],
+            fg_color=self._t["gold"], hover_color=self._t["primary_hover"],
             corner_radius=18,
         )
         self._btn_play.pack(side="left", padx=1)
@@ -765,41 +730,25 @@ class ChatbotSBCApp:
         if self._typing_activo:
             self._ocultar_typing()
 
-        def crear():
-            if not hasattr(self, '_mensajes_container') or not self._mensajes_container.winfo_exists():
-                return
-            bubble = ctk.CTkFrame(
-                self._mensajes_container,
-                fg_color=self._t["bubble_user"] if es_usuario else self._t["bubble_bot"],
-                corner_radius=16,
-            )
-            if es_usuario:
-                bubble.pack(fill="x", padx=(60, 4), pady=3, anchor="e")
-            else:
-                bubble.pack(fill="x", padx=(4, 60), pady=3, anchor="w")
+        def insertar():
+            self._chat.configure(state="normal")
+            t = tag or ("bubble_user" if es_usuario else "bubble_bot")
+            self._chat.insert("end", f"{texto}\n", t)
+            self._chat.see("end")
+            self._chat.configure(state="disabled")
 
-            label = ctk.CTkLabel(
-                bubble, text=texto, wraplength=320,
-                font=("Segoe UI", 13),
-                text_color=self._t["bubble_user_text"] if es_usuario else self._t["bubble_bot_text"],
-                anchor="w", justify="left" if not es_usuario else "right",
-            )
-            label.pack(fill="x", padx=14, pady=10)
-
-            self._mensajes_container._parent_canvas.yview_moveto(1.0)
-
-        self.ventana.after(DELAY_MS, crear)
+        self.ventana.after(DELAY_MS, insertar)
 
     def _agregar_mensaje_con_efecto(self, texto: str, es_usuario: bool = False, tag: str = ""):
         if es_usuario:
             self._agregar_mensaje(texto, True, tag=tag)
             return
         self._mostrar_typing()
-        threading.Thread(target=self._simular_escritura, args=(texto,), daemon=True).start()
+        threading.Thread(target=self._simular_escritura, args=(texto, tag), daemon=True).start()
 
-    def _simular_escritura(self, texto: str):
+    def _simular_escritura(self, texto: str, tag: str = ""):
         time.sleep(DELAY_MS / 1000)
-        self.ventana.after(0, lambda: self._agregar_mensaje(texto, False))
+        self.ventana.after(0, lambda: self._agregar_mensaje(texto, False, tag=tag))
 
     def _mostrar_typing(self):
         if self._typing_activo:
@@ -807,17 +756,12 @@ class ChatbotSBCApp:
         self._typing_activo = True
 
         def mostrar():
-            if not hasattr(self, '_mensajes_container') or not self._mensajes_container.winfo_exists():
-                return
-            if self._typing_label and self._typing_label.winfo_exists():
-                return
-            self._typing_label = ctk.CTkLabel(
-                self._mensajes_container, text="● ● ●",
-                font=("Segoe UI", 16),
-                text_color=self._t["text_sec"], anchor="w",
-            )
-            self._typing_label.pack(fill="x", padx=(20, 60), pady=(6, 3), anchor="w")
-            self._mensajes_container._parent_canvas.yview_moveto(1.0)
+            self._chat.configure(state="normal")
+            tag_start = self._chat.index("end-1c")
+            self._chat.insert("end", "● ● ●\n", "typing")
+            self._tag_typing_start = tag_start
+            self._chat.see("end")
+            self._chat.configure(state="disabled")
             self._animar_typing(0)
 
         self.ventana.after(0, mostrar)
@@ -826,15 +770,16 @@ class ChatbotSBCApp:
         if not self._typing_activo:
             return
         frames = ["● ○ ○", "● ● ○", "● ● ●", "● ● ○", "● ○ ○", "○ ○ ○"]
-
         def actualizar():
             try:
-                if self._typing_label and self._typing_label.winfo_exists():
-                    idx = paso % len(frames)
-                    self._typing_label.configure(text=frames[idx])
+                self._chat.configure(state="normal")
+                idx = paso % len(frames)
+                self._chat.delete("end-2l", "end-1l")
+                self._chat.insert("end", frames[idx] + "\n", "typing")
+                self._chat.see("end")
+                self._chat.configure(state="disabled")
             except Exception:
                 pass
-
         self.ventana.after(0, actualizar)
         if self._typing_activo:
             self.ventana.after(400, lambda: self._animar_typing(paso + 1))
@@ -843,15 +788,14 @@ class ChatbotSBCApp:
         if not self._typing_activo:
             return
         self._typing_activo = False
-
         def ocultar():
             try:
-                if self._typing_label and self._typing_label.winfo_exists():
-                    self._typing_label.destroy()
-                self._typing_label = None
+                self._chat.configure(state="normal")
+                self._chat.delete("end-2l", "end-1l")
+                self._chat.see("end")
+                self._chat.configure(state="disabled")
             except Exception:
                 pass
-
         self.ventana.after(0, ocultar)
 
     def _limpiar_botones_opciones(self):
@@ -867,7 +811,7 @@ class ChatbotSBCApp:
         for i, opcion in enumerate(opciones):
             texto = opcion["texto"]
             marco = ctk.CTkButton(
-                self._mensajes_container,
+                self._chat_frame,
                 text=texto, cursor="hand2",
                 command=lambda idx=i: self._on_boton_opcion(idx),
                 fg_color=self._t["bubble_bot"],
@@ -928,7 +872,9 @@ class ChatbotSBCApp:
 
     def _procesar_nodo_hoja(self):
         diagnostico = self.motor.obtener_diagnostico()
-        self._agregar_mensaje_con_efecto(diagnostico)
+        self._agregar_mensaje("─── ⋆⋅☆⋅⋆ ───", tag="separador")
+        self._agregar_mensaje_con_efecto(diagnostico, tag="diagnostico")
+        self._agregar_mensaje("─── ⋆⋅☆⋅⋆ ───", tag="separador")
         self._ejecutar_spotify()
 
     def _ejecutar_spotify(self):
@@ -949,7 +895,7 @@ class ChatbotSBCApp:
         nombre = resultado.get("nombre", "Playlist recomendada")
         url = resultado.get("url", "")
         desc = resultado.get("descripcion", "")
-        self.ventana.after(0, lambda: self._agregar_mensaje(nombre))
+        self.ventana.after(0, lambda: self._agregar_mensaje(nombre, tag="bubble_bot_gold"))
         if desc:
             self.ventana.after(0, lambda d=desc: self._agregar_mensaje(d))
         self.ventana.after(0, lambda u=url: self._agregar_mensaje(u))
@@ -980,47 +926,47 @@ class ChatbotSBCApp:
 
         if url:
             btn = ctk.CTkButton(
-                self._mensajes_container, text="Abrir en Spotify",
+                self._chat_frame, text="Abrir en Spotify",
                 command=abrir_spotify,
                 fg_color="#1DB954", hover_color="#1AA34A",
                 text_color="white", corner_radius=16, height=38,
                 font=("Segoe UI", 12, "bold"),
             )
-            btn.pack(fill="x", padx=4, pady=2)
+            btn.pack(fill="x", padx=14, pady=2)
             self._botones_opciones_actuales.append(btn)
 
         if self.token_spotify:
             btn = ctk.CTkButton(
-                self._mensajes_container, text="Reproducir ahora",
+                self._chat_frame, text="Reproducir ahora",
                 command=reproducir,
                 fg_color=self._t["primary"], hover_color=self._t["primary_hover"],
                 text_color="white", corner_radius=16, height=38,
                 font=("Segoe UI", 12, "bold"),
             )
-            btn.pack(fill="x", padx=4, pady=2)
+            btn.pack(fill="x", padx=14, pady=2)
             self._botones_opciones_actuales.append(btn)
 
         btn = ctk.CTkButton(
-            self._mensajes_container, text="Nuevo diagnóstico",
+            self._chat_frame, text="Nuevo diagnóstico",
             command=nuevo,
             fg_color="transparent", hover_color=self._t["border"],
             text_color=self._t["text_sec"], corner_radius=16, height=38,
             font=("Segoe UI", 12),
             border_width=1, border_color=self._t["border"],
         )
-        btn.pack(fill="x", padx=4, pady=2)
+        btn.pack(fill="x", padx=14, pady=2)
         self._botones_opciones_actuales.append(btn)
 
     def _mostrar_boton_reiniciar(self):
         btn = ctk.CTkButton(
-            self._mensajes_container, text="Nuevo diagnóstico",
+            self._chat_frame, text="Nuevo diagnóstico",
             command=self._reiniciar_diagnostico,
             fg_color="transparent", hover_color=self._t["border"],
             text_color=self._t["text_sec"], corner_radius=16, height=38,
             font=("Segoe UI", 12),
             border_width=1, border_color=self._t["border"],
         )
-        btn.pack(fill="x", padx=4, pady=2)
+        btn.pack(fill="x", padx=14, pady=2)
         self._botones_opciones_actuales.append(btn)
 
     def _intentar_reproduccion(self, playlist: dict):
@@ -1061,13 +1007,13 @@ class ChatbotSBCApp:
         def reintentar():
             self._intentar_reproduccion(playlist)
         btn = ctk.CTkButton(
-            self._mensajes_container, text="Reintentar",
+            self._chat_frame, text="Reintentar",
             command=reintentar,
             fg_color=self._t["primary"], hover_color=self._t["primary_hover"],
             text_color="white", corner_radius=16, height=38,
             font=("Segoe UI", 12, "bold"),
         )
-        btn.pack(fill="x", padx=4, pady=2)
+        btn.pack(fill="x", padx=14, pady=2)
         self._botones_opciones_actuales.append(btn)
 
     def _actualizar_btn_conectado(self, nombre: str):
@@ -1221,13 +1167,12 @@ class ChatbotSBCApp:
         if hasattr(self, '_resultado_playlist'):
             del self._resultado_playlist
         self._ocultar_player()
-        if hasattr(self, '_mensajes_container'):
-            for w in self._mensajes_container.winfo_children():
-                try:
-                    w.destroy()
-                except Exception:
-                    pass
-        self._typing_label = None
+        self._chat.configure(state="normal")
+        self._chat.delete("1.0", "end")
+        self._chat.configure(state="disabled")
+        for attr in ["_tag_typing_start"]:
+            if hasattr(self, attr):
+                delattr(self, attr)
         self._typing_activo = False
         self._iniciar_conversacion()
 
