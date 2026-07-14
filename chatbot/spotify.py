@@ -233,8 +233,153 @@ def obtener_canciones_playlist(sp: spotipy.Spotify, playlist_id: str, limit: int
                 a.get("name", "") for a in track.get("artists", []) if a
             )
             url = track.get("external_urls", {}).get("spotify", "")
-            canciones.append({"nombre": nombre, "artista": artista, "url": url})
+            album = track.get("album", {})
+            album_nombre = album.get("name", "")
+            album_art = ""
+            images = album.get("images", [])
+            if images:
+                album_art = images[0].get("url", "")
+            canciones.append({
+                "nombre": nombre,
+                "artista": artista,
+                "url": url,
+                "album": album_nombre,
+                "album_art": album_art,
+                "duracion_ms": track.get("duration_ms", 0),
+                "id": track.get("id", ""),
+            })
         return canciones
     except Exception as e:
         logger.error(f"Error al obtener canciones: {e}")
         return []
+
+
+def pausar(sp: spotipy.Spotify) -> str:
+    try:
+        sp.pause_playback()
+        return "ok"
+    except spotipy.SpotifyException as e:
+        if "NO_ACTIVE_DEVICE" in str(e):
+            return "no_device"
+        logger.error(f"Error al pausar: {e}")
+        return "error"
+
+
+def reanudar(sp: spotipy.Spotify) -> str:
+    try:
+        sp.start_playback()
+        return "ok"
+    except spotipy.SpotifyException as e:
+        if "NO_ACTIVE_DEVICE" in str(e):
+            return "no_device"
+        logger.error(f"Error al reanudar: {e}")
+        return "error"
+
+
+def siguiente(sp: spotipy.Spotify) -> str:
+    try:
+        sp.next_track()
+        return "ok"
+    except spotipy.SpotifyException as e:
+        if "NO_ACTIVE_DEVICE" in str(e):
+            return "no_device"
+        logger.error(f"Error al pasar: {e}")
+        return "error"
+
+
+def anterior(sp: spotipy.Spotify) -> str:
+    try:
+        sp.previous_track()
+        return "ok"
+    except spotipy.SpotifyException as e:
+        if "NO_ACTIVE_DEVICE" in str(e):
+            return "no_device"
+        logger.error(f"Error al retroceder: {e}")
+        return "error"
+
+
+def cambiar_volumen(sp: spotipy.Spotify, porcentaje: int) -> str:
+    try:
+        sp.volume(max(0, min(100, porcentaje)))
+        return "ok"
+    except spotipy.SpotifyException as e:
+        logger.error(f"Error al cambiar volumen: {e}")
+        return "error"
+
+
+def alternar_shuffle(sp: spotipy.Spotify, estado: bool = None) -> dict:
+    try:
+        actual = sp.current_playback(additional_types=[])
+        if actual:
+            shuffle_actual = actual.get("shuffle_state", False)
+            nuevo = not shuffle_actual if estado is None else estado
+            sp.shuffle(nuevo)
+            return {"ok": True, "shuffle": nuevo}
+        return {"ok": False, "error": "no_active_device"}
+    except Exception as e:
+        logger.error(f"Error shuffle: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+def alternar_repetir(sp: spotipy.Spotify, estado: str = None) -> dict:
+    try:
+        actual = sp.current_playback(additional_types=[])
+        if actual:
+            repeat_actual = actual.get("repeat_state", "off")
+            estados = ["off", "context", "track"]
+            if estado is None:
+                idx = (estados.index(repeat_actual) + 1) % 3 if repeat_actual in estados else 1
+                estado = estados[idx]
+            sp.repeat(estado)
+            return {"ok": True, "repeat": estado}
+        return {"ok": False, "error": "no_active_device"}
+    except Exception as e:
+        logger.error(f"Error repeat: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+def obtener_estado(sp: spotipy.Spotify) -> dict:
+    try:
+        data = sp.current_playback(additional_types=["track"])
+        if data is None:
+            return {"activo": False, "error": "no_active_device"}
+        item = data.get("item") or {}
+        album = item.get("album") or {}
+        images = album.get("images", [])
+        artistas = item.get("artists", []) or []
+        return {
+            "activo": True,
+            "reproduciendo": data.get("is_playing", False),
+            "progreso_ms": data.get("progress_ms", 0),
+            "duracion_ms": item.get("duration_ms", 0),
+            "cancion": item.get("name", ""),
+            "artista": ", ".join(a.get("name", "") for a in artistas if a),
+            "album": album.get("name", ""),
+            "album_art": images[0].get("url", "") if len(images) > 0 else "",
+            "id_cancion": item.get("id", ""),
+            "shuffle": data.get("shuffle_state", False),
+            "repeat": data.get("repeat_state", "off"),
+            "volumen": data.get("device", {}).get("volume_percent", 100),
+        }
+    except Exception as e:
+        logger.error(f"Error al obtener estado: {e}")
+        return {"activo": False, "error": str(e)}
+
+
+_descarga_album_cache: dict[str, bytes] = {}
+
+
+def obtener_album_art(sp: spotipy.Spotify, url_imagen: str) -> Optional[bytes]:
+    if not url_imagen:
+        return None
+    if url_imagen in _descarga_album_cache:
+        return _descarga_album_cache[url_imagen]
+    try:
+        import requests
+        resp = requests.get(url_imagen, timeout=5)
+        if resp.status_code == 200:
+            _descarga_album_cache[url_imagen] = resp.content
+            return resp.content
+    except Exception as e:
+        logger.warning(f"Error descargando album art: {e}")
+    return None

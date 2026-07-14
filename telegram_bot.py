@@ -63,7 +63,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/about - Información del proyecto\n"
         "/reset - Reiniciar tu sesión\n"
         "/spotify - Obtener playlist o conectar Spotify\n"
-        "/diagnostico - Ver tu diagnóstico actual\n\n"
+        "/diagnostico - Ver tu diagnóstico actual\n"
+        "/nowplaying - Ver qué suena y controles de reproducción\n\n"
         "Cuéntame cómo te sientes con tus propias palabras. "
         "Al final recibirás una playlist recomendada personalizada."
     )
@@ -127,6 +128,73 @@ async def cmd_spotify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text(
             "Hubo un error al conectar con Spotify. Intenta de nuevo más tarde."
         )
+
+
+async def cmd_nowplaying(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    sesion = _obtener_sesion(chat_id)
+    if not sesion.token_spotify:
+        await update.message.reply_text(
+            "Primero conecta tu cuenta de Spotify con /spotify."
+        )
+        return
+    try:
+        sp = spotify.crear_cliente(sesion.token_spotify)
+        estado = spotify.obtener_estado(sp)
+        if not estado.get("activo"):
+            await update.message.reply_text(
+                "No hay reproducción activa. Abre Spotify en un dispositivo."
+            )
+            return
+        icono = "▶️" if estado.get("reproduciendo") else "⏸️"
+        cancion = estado.get("cancion", "Desconocida")
+        artista = estado.get("artista", "Desconocido")
+        progreso = _formatear_ms(estado.get("progreso_ms", 0))
+        duracion = _formatear_ms(estado.get("duracion_ms", 0))
+        shuffle = "🔀 Sí" if estado.get("shuffle") else "🔀 No"
+        repeat = {"off": "🔁 No", "context": "🔁 Lista", "track": "🔂 Una"}.get(estado.get("repeat", "off"), "")
+        texto = (
+            f"{icono} *Reproduciendo ahora:*\n"
+            f"• {cancion} — {artista}\n"
+            f"• {progreso} / {duracion}\n"
+            f"• {shuffle} | {repeat}"
+        )
+        await update.message.reply_text(
+            texto, parse_mode="Markdown",
+            reply_markup=_construir_teclado_controles(),
+        )
+    except Exception as e:
+        logger.error(f"Error en nowplaying: {e}")
+        await update.message.reply_text(
+            "Error al obtener el estado. ¿Conectaste Spotify con /spotify?"
+        )
+
+
+def _formatear_ms(ms: int) -> str:
+    total_seg = ms // 1000
+    m, s = divmod(total_seg, 60)
+    return f"{m}:{s:02d}"
+
+
+def _construir_teclado_controles() -> InlineKeyboardMarkup:
+    teclado = [
+        [
+            InlineKeyboardButton("⏮", callback_data="control:anterior"),
+            InlineKeyboardButton("⏸ Pausar", callback_data="control:pausa"),
+            InlineKeyboardButton("▶️ Reanudar", callback_data="control:reanudar"),
+            InlineKeyboardButton("⏭", callback_data="control:siguiente"),
+        ],
+        [
+            InlineKeyboardButton("🔊 +", callback_data="control:volumen_up"),
+            InlineKeyboardButton("🔉 -", callback_data="control:volumen_down"),
+            InlineKeyboardButton("🔀 Shuffle", callback_data="control:shuffle"),
+            InlineKeyboardButton("🔁 Repetir", callback_data="control:repetir"),
+        ],
+        [
+            InlineKeyboardButton("🔄 Actualizar", callback_data="control:actualizar"),
+        ],
+    ]
+    return InlineKeyboardMarkup(teclado)
 
 
 async def cmd_diagnostico(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -371,6 +439,7 @@ def _construir_teclado_acciones(url: str, tiene_token: bool) -> InlineKeyboardMa
         teclado.append([InlineKeyboardButton("Abrir en Spotify", url=url)])
     if tiene_token:
         teclado.append([InlineKeyboardButton("Reproducir ahora", callback_data="play_now")])
+        teclado.append([InlineKeyboardButton("🎮 Controles", callback_data="control:actualizar")])
     teclado.append([InlineKeyboardButton("Nuevo diagnóstico", callback_data="nuevo_diagnostico")])
     return InlineKeyboardMarkup(teclado)
 
@@ -436,6 +505,64 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await query.edit_message_text(
                 "Error al reproducir. Intenta abrir Spotify manualmente."
             )
+        return
+
+    if data.startswith("control:"):
+        accion = data.split(":", 1)[1]
+        sesion = _obtener_sesion(chat_id)
+        if not sesion.token_spotify:
+            await query.edit_message_text("Conecta Spotify con /spotify primero.")
+            return
+        try:
+            sp = spotify.crear_cliente(sesion.token_spotify)
+            if accion == "pausa":
+                res = spotify.pausar(sp)
+                msg = "⏸ Reproducción pausada." if res == "ok" else "No hay dispositivo activo."
+            elif accion == "reanudar":
+                res = spotify.reanudar(sp)
+                msg = "▶️ Reproducción reanudada." if res == "ok" else "No hay dispositivo activo."
+            elif accion == "siguiente":
+                res = spotify.siguiente(sp)
+                msg = "⏭ Canción siguiente." if res == "ok" else "No hay dispositivo activo."
+            elif accion == "anterior":
+                res = spotify.anterior(sp)
+                msg = "⏮ Canción anterior." if res == "ok" else "No hay dispositivo activo."
+            elif accion == "volumen_up":
+                estado = spotify.obtener_estado(sp)
+                vol = estado.get("volumen", 50)
+                spotify.cambiar_volumen(sp, min(100, vol + 10))
+                msg = f"🔊 Volumen: {min(100, vol + 10)}%"
+            elif accion == "volumen_down":
+                estado = spotify.obtener_estado(sp)
+                vol = estado.get("volumen", 50)
+                spotify.cambiar_volumen(sp, max(0, vol - 10))
+                msg = f"🔉 Volumen: {max(0, vol - 10)}%"
+            elif accion == "shuffle":
+                res = spotify.alternar_shuffle(sp)
+                msg = "🔀 Shuffle activado." if res.get("shuffle") else "🔀 Shuffle desactivado."
+            elif accion == "repetir":
+                res = spotify.alternar_repetir(sp)
+                estado_r = {"off": "🔁 No repetir", "context": "🔁 Repetir lista", "track": "🔂 Repetir una"}
+                msg = estado_r.get(res.get("repeat", "off"), "🔁 Repetir")
+            elif accion == "actualizar":
+                estado = spotify.obtener_estado(sp)
+                if estado.get("activo"):
+                    icono = "▶️" if estado.get("reproduciendo") else "⏸️"
+                    cancion = estado.get("cancion", "?")
+                    artista = estado.get("artista", "?")
+                    prog = _formatear_ms(estado.get("progreso_ms", 0))
+                    dur = _formatear_ms(estado.get("duracion_ms", 0))
+                    msg = f"{icono} {cancion} — {artista}\n{prog} / {dur}"
+                else:
+                    msg = "No hay reproducción activa."
+            else:
+                msg = f"Acción desconocida: {accion}"
+            await query.edit_message_text(
+                msg, reply_markup=_construir_teclado_controles(),
+            )
+        except Exception as e:
+            logger.error(f"Error control {accion}: {e}")
+            await query.edit_message_text(f"Error al ejecutar {accion}.")
         return
 
 

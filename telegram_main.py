@@ -20,6 +20,7 @@ from telegram_bot import (
     cmd_reset,
     cmd_spotify,
     cmd_diagnostico,
+    cmd_nowplaying,
     handle_message,
     callback_handler,
     error_handler,
@@ -51,6 +52,7 @@ def main() -> None:
     app.add_handler(CommandHandler("reset", cmd_reset))
     app.add_handler(CommandHandler("spotify", cmd_spotify))
     app.add_handler(CommandHandler("diagnostico", cmd_diagnostico))
+    app.add_handler(CommandHandler("nowplaying", cmd_nowplaying))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_error_handler(error_handler)
